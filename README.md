@@ -1,5 +1,13 @@
 # MoreToken
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Ai-Kota/MoreToken)](https://goreportcard.com/report/github.com/Ai-Kota/MoreToken)
+[![GitHub Stars](https://img.shields.io/github/stars/Ai-Kota/MoreToken?style=social)](https://github.com/Ai-Kota/MoreToken/stargazers)
+[![GitHub Releases](https://img.shields.io/github/v/release/Ai-Kota/MoreToken)](https://github.com/Ai-Kota/MoreToken/releases)
+[![Go Reference](https://pkg.go.dev/badge/github.com/Ai-Kota/MoreToken.svg)](https://pkg.go.dev/github.com/Ai-Kota/MoreToken)
+
+> **每月省几百块 API 费用**——用免费模型跑 Claude Code，自动无缝切换，会话不掉线。
+
 A session-preserving routing gateway with **free-first** policy: one endpoint, automatic model switching.
 
 **By default routes through free tiers; seamlessly falls back to paid on failure; deterministically returns to free when health recovers.**
