@@ -1,0 +1,48 @@
+{
+  "listen": ":8462",
+  "_comment": "Example configuration for MoreToken. Copy to config.json and adjust for your environment.",
+  "_instructions": [
+    "1. Replace 'env:EXAMPLE_KEY_*' with real keys or vault paths",
+    "2. Add more providers as needed",
+    "3. Run: ./bin/moretoken -config config/config.json"
+  ],
+  "providers": [
+    {
+      "id": "example-free-openai",
+      "base_url": "https://api.example.com/v1",
+      "format": "openai",
+      "tier": "free",
+      "_comment": "Keys: use 'env:' for env vars, plain strings for testing (insecure), or 'vault:' for vault store",
+      "keys": [
+        "env:EXAMPLE_FREE_KEY_1",
+        "env:EXAMPLE_FREE_KEY_2"
+      ],
+      "models": [
+        {
+          "id": "example-model-1",
+          "name": "Example Model 1",
+          "kinds": ["reasoning", "coding", "general", "fast"],
+          "context_length": 128000
+        }
+      ]
+    },
+    {
+      "id": "example-paid-openai",
+      "base_url": "https://api.example.com/v1",
+      "format": "openai",
+      "tier": "paid",
+      "_comment": "Paid fallback provider",
+      "keys": [
+        "env:EXAMPLE_PAID_KEY"
+      ],
+      "models": [
+        {
+          "id": "example-model-pro",
+          "name": "Example Model Pro",
+          "kinds": ["reasoning", "coding", "general", "fast"],
+          "context_length": 200000
+        }
+      ]
+    }
+  ]
+}
