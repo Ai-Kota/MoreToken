@@ -1,0 +1,132 @@
+{
+  "listen": ":8462",
+  "providers": [
+    {
+      "_comment": "Phase 1: OpenAI 兼容 provider，直接调 AI 服务 API",
+      "id": "openrouter",
+      "base_url": "https://openrouter.ai/api/v1/chat/completions",
+      "format": "openai",
+      "auth_header": "bearer",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "headers": {
+        "HTTP-Referer": "https://moretoken-proxy.local",
+        "X-Title": "Free Tier Proxy"
+      },
+      "models": [
+        { "id": ":free", "name": "OpenRouter Free Pool" }
+      ]
+    },
+    {
+      "id": "groq",
+      "base_url": "https://api.groq.com/openai/v1/chat/completions",
+      "format": "openai",
+      "auth_header": "bearer",
+      "api_key_env": "GROQ_API_KEY",
+      "models": [
+        { "id": "llama-3.3-70b-versatile", "name": "Llama 3.3 70B" },
+        { "id": "openai/gpt-oss-120b", "name": "GPT-OSS 120B" },
+        { "id": "qwen/qwen3-32b", "name": "Qwen3 32B" },
+        { "id": "meta-llama/llama-4-scout-17b-16e-instruct", "name": "Llama 4 Scout" }
+      ]
+    },
+    {
+      "id": "cerebras",
+      "base_url": "https://api.cerebras.ai/v1/chat/completions",
+      "format": "openai",
+      "auth_header": "bearer",
+      "api_key_env": "CEREBRAS_API_KEY",
+      "models": [
+        { "id": "llama-3.3-70b", "name": "Llama 3.3 70B" }
+      ]
+    },
+    {
+      "id": "sambanova",
+      "base_url": "https://api.sambanova.ai/v1/chat/completions",
+      "format": "openai",
+      "auth_header": "bearer",
+      "api_key_env": "SAMBANOVA_API_KEY",
+      "models": [
+        { "id": "Meta-Llama-3.3-70B-Instruct", "name": "Llama 3.3 70B" },
+        { "id": "DeepSeek-V3-0324", "name": "DeepSeek V3" }
+      ]
+    },
+    {
+      "id": "deepseek",
+      "base_url": "https://api.deepseek.com/chat/completions",
+      "format": "openai",
+      "auth_header": "bearer",
+      "api_key_env": "DEEPSEEK_API_KEY",
+      "models": [
+        { "id": "deepseek-chat", "name": "DeepSeek V3" },
+        { "id": "deepseek-reasoner", "name": "DeepSeek R1" }
+      ]
+    },
+    {
+      "_comment": "Phase 1 Anthropic 格式（Claude Code 协议）· 直通转发，零翻译",
+      "id": "deepseek-anthropic",
+      "base_url": "https://api.deepseek.com/anthropic/v1/messages",
+      "format": "anthropic",
+      "auth_header": "bearer",
+      "api_key_env": "DEEPSEEK_API_KEY",
+      "models": [
+        { "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash" },
+        { "id": "deepseek-chat", "name": "DeepSeek Chat" },
+        { "id": "deepseek-reasoner", "name": "DeepSeek Reasoner" }
+      ]
+    },
+    {
+      "id": "glm-anthropic",
+      "base_url": "https://open.bigmodel.cn/api/anthropic/v1/messages",
+      "format": "anthropic",
+      "auth_header": "bearer",
+      "api_key_env": "GLM_API_KEY",
+      "models": [
+        { "id": "glm-5", "name": "GLM 5" },
+        { "id": "glm-4.5", "name": "GLM 4.5" }
+      ]
+    },
+    {
+      "_comment": "Phase 3: OAuth — 通过 GitHub Copilot 免费使用 GPT-4o/Claude/O3",
+      "id": "copilot",
+      "base_url": "https://api.githubcopilot.com/chat/completions",
+      "format": "openai",
+      "oauth_provider": "github",
+      "oauth_headers": {
+        "Editor-Version": "Neovim-0.9.1",
+        "x-initiator": "user"
+      },
+      "models": [
+        { "id": "gpt-4o", "name": "GPT-4o" },
+        { "id": "claude-3.5-sonnet", "name": "Claude 3.5 Sonnet" },
+        { "id": "o3-mini", "name": "O3 Mini" },
+        { "id": "gpt-4o-mini", "name": "GPT-4o Mini" }
+      ]
+    },
+    {
+      "_comment": "Phase 2: 需要 OAuth + 格式翻译，首版跳过",
+      "id": "gemini",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta/models",
+      "format": "gemini",
+      "auth_header": "x-goog-api-key",
+      "api_key_env": "GEMINI_API_KEY",
+      "phase": 2,
+      "models": [
+        { "id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash" },
+        { "id": "gemini-2.5-pro", "name": "Gemini 2.5 Pro" }
+      ]
+    },
+    {
+      "_comment": "Phase 2: 需要特殊认证方式",
+      "id": "cloudflare",
+      "base_url": "https://api.cloudflare.com/client/v4/accounts",
+      "format": "openai",
+      "auth_header": "bearer",
+      "api_key_env": "CLOUDFLARE_API_KEY",
+      "phase": 2,
+      "notes": "需要 CF_ACCOUNT_ID 环境变量",
+      "models": [
+        { "id": "@cf/meta/llama-3.3-70b-instruct-fp8", "name": "Llama 3.3 70B" }
+      ]
+    }
+  ]
+}

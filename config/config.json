@@ -1,0 +1,283 @@
+{
+  "listen": ":8462",
+  "providers": [
+    {
+      "_comment": "免费层·OpenAI 协议·厂商 agnes。agnes 免费档 20 RPM/账号且按账号隔离，故 33 把 key 轮换吸收限流。",
+      "id": "agnes",
+      "base_url": "https://apihub.agnes-ai.com/v1",
+      "format": "openai",
+      "tier": "free",
+      "keys": [
+        "vault:freellm/provider/agnes/agnes-13973093041",
+        "vault:freellm/provider/agnes/agnes-15161541510163",
+        "vault:freellm/provider/agnes/agnes-2818738696",
+        "vault:freellm/provider/agnes/agnes-3449744124",
+        "vault:freellm/provider/agnes/agnes-76690315",
+        "vault:freellm/provider/agnes/agnes-aifengguo",
+        "vault:freellm/provider/agnes/agnes-aifengguo126",
+        "vault:freellm/provider/agnes/agnes-aifengguoyeah",
+        "vault:freellm/provider/agnes/agnes-aimly",
+        "vault:freellm/provider/agnes/agnes-aimlying",
+        "vault:freellm/provider/agnes/agnes-aimlying-aliyun",
+        "vault:freellm/provider/agnes/agnes-aimlying126",
+        "vault:freellm/provider/agnes/agnes-aimlyingyeah",
+        "vault:freellm/provider/agnes/agnes-kekexiaoxiaole126",
+        "vault:freellm/provider/agnes/agnes-kekexiaoxiaoleyeah",
+        "vault:freellm/provider/agnes/agnes-laoxiao",
+        "vault:freellm/provider/agnes/agnes-lxj-kc",
+        "vault:freellm/provider/agnes/agnes-lxjfordream",
+        "vault:freellm/provider/agnes/agnes-meimei",
+        "vault:freellm/provider/agnes/agnes-pengzixing01",
+        "vault:freellm/provider/agnes/agnes-pengzixing02yeah",
+        "vault:freellm/provider/agnes/agnes-xiaoyinping163",
+        "vault:freellm/provider/agnes/agnes-zhengyinglee",
+        "vault:freellm/provider/agnes/agnes-zhengyinglee126",
+        "vault:freellm/provider/agnes/agnes-zhengyingleeyeah",
+        "vault:freellm/provider/agnes/agnes-zixing",
+        "vault:freellm/provider/agnes/agnes-zmmeimei",
+        "vault:freellm/provider/agnes/agnes-zmmeimei126",
+        "vault:freellm/provider/agnes/agnes-zmmeimeiyeah",
+        "vault:freellm/provider/agnes/agnes2",
+        "vault:freellm/provider/agnes/agnes3",
+        "vault:freellm/provider/agnes/agnes4",
+        "vault:freellm/provider/agnes/agnes5"
+      ],
+      "models": [
+        {
+          "id": "agnes-2.5-flash",
+          "name": "Agnes 2.5 Flash",
+          "kinds": [
+            "reasoning",
+            "coding",
+            "general",
+            "fast"
+          ],
+          "context_length": 524288
+        },
+        {
+          "id": "agnes-2.0-flash",
+          "name": "Agnes 2.0 Flash",
+          "kinds": [
+            "coding",
+            "general",
+            "fast"
+          ],
+          "context_length": 524288
+        }
+      ]
+    },
+    {
+      "_comment": "免费层·OpenAI 协议·**异厂商** xkiro（聚合网关，提供 MiniMax/Qwen 等）。与 agnes 不同厂商，是 agnes 平台级故障时的免费兜底。仅 :free 模型可用，非 :free 一律付费墙（实测）。",
+      "id": "xkiro",
+      "base_url": "https://api.xkiro.com/v1",
+      "format": "openai",
+      "tier": "free",
+      "keys": [
+        "vault:freellm/provider/xkiro/cc-xkiro",
+        "vault:freellm/provider/xkiro/xkiro-76690315",
+        "vault:freellm/provider/xkiro/xkiro-aifengguo",
+        "vault:freellm/provider/xkiro/xkiro-aimlying",
+        "vault:freellm/provider/xkiro/xkiro-aimlying2",
+        "vault:freellm/provider/xkiro/xkiro-iphone",
+        "vault:freellm/provider/xkiro/xkiro-lxjfordream",
+        "vault:freellm/provider/xkiro/xkiro-meimei",
+        "vault:freellm/provider/xkiro/xkiro-mingming",
+        "vault:freellm/provider/xkiro/xkiro-zhengying",
+        "vault:freellm/provider/xkiro/xkiro-zhengyinglee"
+      ],
+      "models": [
+        {
+          "id": "minimax/minimax-m3:free",
+          "name": "MiniMax M3 (free)",
+          "kinds": [
+            "reasoning",
+            "coding",
+            "general"
+          ],
+          "context_length": 1000000,
+          "max_output_tokens": 65536
+        },
+        {
+          "id": "qwen/qwen3-coder-plus:free",
+          "name": "Qwen3 Coder Plus (free)",
+          "kinds": [
+            "coding",
+            "general"
+          ],
+          "context_length": 1048576,
+          "max_output_tokens": 65536
+        },
+        {
+          "id": "qwen/qwen3.7-max:free",
+          "name": "Qwen3.7 Max (free)",
+          "kinds": [
+            "coding",
+            "general"
+          ],
+          "context_length": 1000000,
+          "max_output_tokens": 65536
+        }
+      ]
+    },
+    {
+      "_comment": "免费层·Anthropic 协议（Claude Code 走这条）·厂商 agnes。agnes 原生即 Anthropic 协议，零翻译。",
+      "id": "agnes-anthropic",
+      "base_url": "https://apihub.agnes-ai.com",
+      "format": "anthropic",
+      "tier": "free",
+      "keys": [
+        "vault:freellm/provider/agnes/agnes-13973093041",
+        "vault:freellm/provider/agnes/agnes-15161541510163",
+        "vault:freellm/provider/agnes/agnes-2818738696",
+        "vault:freellm/provider/agnes/agnes-3449744124",
+        "vault:freellm/provider/agnes/agnes-76690315",
+        "vault:freellm/provider/agnes/agnes-aifengguo",
+        "vault:freellm/provider/agnes/agnes-aifengguo126",
+        "vault:freellm/provider/agnes/agnes-aifengguoyeah",
+        "vault:freellm/provider/agnes/agnes-aimly",
+        "vault:freellm/provider/agnes/agnes-aimlying",
+        "vault:freellm/provider/agnes/agnes-aimlying-aliyun",
+        "vault:freellm/provider/agnes/agnes-aimlying126",
+        "vault:freellm/provider/agnes/agnes-aimlyingyeah",
+        "vault:freellm/provider/agnes/agnes-kekexiaoxiaole126",
+        "vault:freellm/provider/agnes/agnes-kekexiaoxiaoleyeah",
+        "vault:freellm/provider/agnes/agnes-laoxiao",
+        "vault:freellm/provider/agnes/agnes-lxj-kc",
+        "vault:freellm/provider/agnes/agnes-lxjfordream",
+        "vault:freellm/provider/agnes/agnes-meimei",
+        "vault:freellm/provider/agnes/agnes-pengzixing01",
+        "vault:freellm/provider/agnes/agnes-pengzixing02yeah",
+        "vault:freellm/provider/agnes/agnes-xiaoyinping163",
+        "vault:freellm/provider/agnes/agnes-zhengyinglee",
+        "vault:freellm/provider/agnes/agnes-zhengyinglee126",
+        "vault:freellm/provider/agnes/agnes-zhengyingleeyeah",
+        "vault:freellm/provider/agnes/agnes-zixing",
+        "vault:freellm/provider/agnes/agnes-zmmeimei",
+        "vault:freellm/provider/agnes/agnes-zmmeimei126",
+        "vault:freellm/provider/agnes/agnes-zmmeimeiyeah",
+        "vault:freellm/provider/agnes/agnes2",
+        "vault:freellm/provider/agnes/agnes3",
+        "vault:freellm/provider/agnes/agnes4",
+        "vault:freellm/provider/agnes/agnes5"
+      ],
+      "models": [
+        {
+          "id": "agnes-2.5-flash",
+          "name": "Agnes 2.5 Flash",
+          "kinds": [
+            "reasoning",
+            "coding",
+            "general",
+            "fast"
+          ],
+          "context_length": 524288
+        },
+        {
+          "id": "agnes-2.0-flash",
+          "name": "Agnes 2.0 Flash",
+          "kinds": [
+            "coding",
+            "general",
+            "fast"
+          ],
+          "context_length": 524288
+        }
+      ]
+    },
+    {
+      "_comment": "免费层·Anthropic 协议·**异厂商** xkiro（实测 /v1/messages 200，标准 message 格式）。Claude Code 这条路上的异厂商免费兜底。",
+      "id": "xkiro-anthropic",
+      "base_url": "https://api.xkiro.com",
+      "format": "anthropic",
+      "tier": "free",
+      "keys": [
+        "vault:freellm/provider/xkiro/cc-xkiro",
+        "vault:freellm/provider/xkiro/xkiro-76690315",
+        "vault:freellm/provider/xkiro/xkiro-aifengguo",
+        "vault:freellm/provider/xkiro/xkiro-aimlying",
+        "vault:freellm/provider/xkiro/xkiro-aimlying2",
+        "vault:freellm/provider/xkiro/xkiro-iphone",
+        "vault:freellm/provider/xkiro/xkiro-lxjfordream",
+        "vault:freellm/provider/xkiro/xkiro-meimei",
+        "vault:freellm/provider/xkiro/xkiro-mingming",
+        "vault:freellm/provider/xkiro/xkiro-zhengying",
+        "vault:freellm/provider/xkiro/xkiro-zhengyinglee"
+      ],
+      "models": [
+        {
+          "id": "minimax/minimax-m3:free",
+          "name": "MiniMax M3 (free)",
+          "kinds": [
+            "reasoning",
+            "coding",
+            "general"
+          ],
+          "context_length": 1000000,
+          "max_output_tokens": 65536
+        },
+        {
+          "id": "qwen/qwen3-coder-plus:free",
+          "name": "Qwen3 Coder Plus (free)",
+          "kinds": [
+            "coding",
+            "general"
+          ],
+          "context_length": 1048576,
+          "max_output_tokens": 65536
+        },
+        {
+          "id": "qwen/qwen3.7-max:free",
+          "name": "Qwen3.7 Max (free)",
+          "kinds": [
+            "coding",
+            "general"
+          ],
+          "context_length": 1000000,
+          "max_output_tokens": 65536
+        }
+      ]
+    },
+    {
+      "_comment": "付费兜底·Anthropic。全免费不可用才进入。Token Plan 付费 key（cpk-），实测工具调用与流式均 200。",
+      "id": "agnes-paid-anthropic",
+      "base_url": "https://apihub.agnes-ai.com",
+      "format": "anthropic",
+      "tier": "paid",
+      "keys": [
+        "vault:freellm/provider/agnes/agnes-paid"
+      ],
+      "models": [
+        {
+          "id": "agnes-3.0-flash",
+          "name": "Agnes 3.0 Flash (paid)",
+          "kinds": [
+            "coding",
+            "general"
+          ],
+          "context_length": 524288
+        }
+      ]
+    },
+    {
+      "_comment": "付费兜底·OpenAI。同上，服务 /v1/chat/completions 那条路。",
+      "id": "agnes-paid-openai",
+      "base_url": "https://apihub.agnes-ai.com/v1",
+      "format": "openai",
+      "tier": "paid",
+      "keys": [
+        "vault:freellm/provider/agnes/agnes-paid"
+      ],
+      "models": [
+        {
+          "id": "agnes-3.0-flash",
+          "name": "Agnes 3.0 Flash (paid)",
+          "kinds": [
+            "coding",
+            "general"
+          ],
+          "context_length": 524288
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,212 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(**)",
+      "Glob(**)",
+      "Grep(**)",
+      "Task(**)",
+      "WebFetch(domain:*)",
+      "Write(src/**)",
+      "Write(tests/**)",
+      "Write(docs/**)",
+      "Write(templates/**)",
+      "Write(*.md)",
+      "Edit(src/**)",
+      "Edit(tests/**)",
+      "Edit(docs/**)",
+      "Bash(go test *)",
+      "Bash(go test -cover *)",
+      "Bash(go build *)",
+      "Bash(go run *)",
+      "Bash(go vet *)",
+      "Bash(go fmt *)",
+      "Bash(go mod *)",
+      "Bash(golangci-lint *)",
+      "Bash(npm test *)",
+      "Bash(npm run *)",
+      "Bash(npm install *)",
+      "Bash(npm ci *)",
+      "Bash(yarn install *)",
+      "Bash(pytest *)",
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(pip install *)",
+      "Bash(pip3 install *)",
+      "Bash(cargo test *)",
+      "Bash(cargo build *)",
+      "Bash(cargo run *)",
+      "Bash(cargo clippy *)",
+      "Bash(cargo fmt *)",
+      "Bash(cargo add *)",
+      "Bash(poetry add *)",
+      "Bash(make *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git stash *)",
+      "Bash(git stash pop *)",
+      "Bash(git checkout -- *)",
+      "Bash(git branch *)",
+      "Bash(git merge *)",
+      "Bash(find *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(wc *)",
+      "Bash(grep *)",
+      "Bash(sed *)",
+      "Bash(awk *)",
+      "Bash(sort *)",
+      "Bash(uniq *)",
+      "Bash(cut *)",
+      "Bash(tr *)",
+      "Bash(mkdir *)",
+      "Bash(touch *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(echo *)",
+      "Bash(date *)",
+      "Bash(pwd)",
+      "Bash(whoami)",
+      "Bash(env)",
+      "Bash(./scripts/bin/*)",
+      "Bash(scripts/bin/*)"
+    ],
+    "deny": [
+      "Write(.env*)",
+      "Write(.secret*)",
+      "Write(*.pem)",
+      "Write(*.key)",
+      "Write(deploy/**)",
+      "Bash(rm -rf *)",
+      "Bash(curl * | sh)",
+      "Bash(wget * | sh)",
+      "Bash(sudo *)",
+      "Bash(chmod 777 *)",
+      "Bash(chown *)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git reset --hard HEAD*)",
+      "Bash(git clean -fd*)",
+      "Bash(terraform destroy*)",
+      "Bash(terraform apply -auto-approve*)",
+      "Bash(kubectl delete *)",
+      "Bash(helm uninstall *)",
+      "Bash(docker rm *)",
+      "Bash(docker run --privileged*)",
+      "Bash(apt install*)",
+      "Bash(apt remove*)",
+      "Bash(brew install*)",
+      "Bash(brew uninstall*)",
+      "Bash(npm install -g*)",
+      "Bash(yarn global add*)",
+      "Bash(go install*)",
+      "Bash(cargo install*)",
+      "Bash(pip install --user*)",
+      "Bash(crontab*)",
+      "Bash(systemctl*)",
+      "Bash(service *)",
+      "Write(.bashrc)",
+      "Write(.zshrc)",
+      "Write(.profile)",
+      "Write(.bash_profile)",
+      "Write(.config/fish/config.fish)"
+    ],
+    "ask": [
+      "Bash(git rebase *)",
+      "Bash(docker build *)",
+      "Bash(docker run *)",
+      "Bash(docker-compose *)",
+      "Bash(kubectl apply *)",
+      "Bash(terraform plan *)",
+      "Bash(terraform apply *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hook.sh env-protect"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hook.sh check-read-before-write"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hook.sh check-scope"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hook.sh env-protect"
+          },
+          {
+            "type": "command",
+            "command": "bash scripts/hook.sh wu-guard"
+          },
+          {
+            "type": "command",
+            "command": "bash scripts/hook.sh verify-commit"
+          },
+          {
+            "type": "command",
+            "command": "bash scripts/hook.sh check-bash-write"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hook.sh track-read"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hook.sh clear-read"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash scripts/hook.sh session-bootstrap"
+          }
+        ]
+      }
+    ]
+  }
+}

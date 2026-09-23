@@ -1,0 +1,12 @@
+# 新项目根 .gitignore —— 由 init.sh 从模板复制生成
+# 忽略 SPT 工具链的编译产物与运行态，避免污染项目 git
+
+# 编译产物
+*.exe
+*.exe~
+scripts/bin/
+
+# ai-guard 运行态（会话/任务状态，不入库）
+.claude/read_tracker.json
+.claude/context-snapshot.md
+.claude/metrics/

@@ -1,0 +1,16 @@
+{
+  "listen": ":8462",
+  "_comment": "自动纳新合并的夹具：手写区只声明 preferred，auto 清单里另有 discovered / dup / image 三个。",
+  "providers": [
+    {
+      "id": "p",
+      "base_url": "https://example.invalid/v1",
+      "format": "openai",
+      "tier": "free",
+      "keys": ["sk-not-a-real-key"],
+      "models": [
+        { "id": "preferred", "name": "Preferred", "kinds": ["reasoning", "general"] }
+      ]
+    }
+  ]
+}

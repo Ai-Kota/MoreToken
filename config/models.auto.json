@@ -1,0 +1,363 @@
+{
+  "generated_at": "2026-09-22T22:20:01Z",
+  "providers": {
+    "agnes": {
+      "verified": [
+        {
+          "id": "agnes-3.0-flash",
+          "name": "agnes-3.0-flash",
+          "kinds": [
+            "general"
+          ]
+        }
+      ],
+      "rejected": [
+        {
+          "id": "agnes-2.5-pro-alpha",
+          "err": "status 403（上游拒绝；纳新不据此惩罚 key）"
+        },
+        {
+          "id": "agnes-2.5-pro",
+          "err": "status 403（上游拒绝；纳新不据此惩罚 key）"
+        },
+        {
+          "id": "agnes-2.5-pro-beta",
+          "err": "status 403（上游拒绝；纳新不据此惩罚 key）"
+        }
+      ]
+    },
+    "agnes-anthropic": {
+      "verified": [
+        {
+          "id": "agnes-3.0-flash",
+          "name": "agnes-3.0-flash",
+          "kinds": [
+            "general"
+          ]
+        }
+      ],
+      "rejected": [
+        {
+          "id": "agnes-2.5-pro-alpha",
+          "err": "status 403（上游拒绝；纳新不据此惩罚 key）"
+        },
+        {
+          "id": "agnes-2.5-pro",
+          "err": "status 403（上游拒绝；纳新不据此惩罚 key）"
+        },
+        {
+          "id": "agnes-2.5-pro-beta",
+          "err": "status 403（上游拒绝；纳新不据此惩罚 key）"
+        }
+      ]
+    },
+    "agnes-paid-anthropic": {
+      "verified": [
+        {
+          "id": "agnes-3.0-flash",
+          "name": "agnes-3.0-flash",
+          "kinds": [
+            "general"
+          ]
+        }
+      ],
+      "rejected": [
+        {
+          "id": "agnes-2.5-pro-alpha",
+          "err": "status 403（上游拒绝；纳新不据此惩罚 key）"
+        },
+        {
+          "id": "agnes-2.5-pro",
+          "err": "status 403（上游拒绝；纳新不据此惩罚 key）"
+        },
+        {
+          "id": "agnes-2.5-pro-beta",
+          "err": "status 403（上游拒绝；纳新不据此惩罚 key）"
+        }
+      ]
+    },
+    "agnes-paid-openai": {
+      "verified": [
+        {
+          "id": "agnes-3.0-flash",
+          "name": "agnes-3.0-flash",
+          "kinds": [
+            "general"
+          ]
+        }
+      ],
+      "rejected": [
+        {
+          "id": "agnes-2.5-pro-alpha",
+          "err": "status 403（上游拒绝；纳新不据此惩罚 key）"
+        },
+        {
+          "id": "agnes-2.5-pro",
+          "err": "status 403（上游拒绝；纳新不据此惩罚 key）"
+        },
+        {
+          "id": "agnes-2.5-pro-beta",
+          "err": "status 403（上游拒绝；纳新不据此惩罚 key）"
+        }
+      ]
+    },
+    "xkiro": {
+      "verified": [
+        {
+          "id": "qwen/qwen3.8-omni-flash:free",
+          "name": "qwen/qwen3.8-omni-flash:free",
+          "kinds": [
+            "general"
+          ],
+          "context_length": 1000000,
+          "max_output_tokens": 65536
+        },
+        {
+          "id": "qwen/qwen3.5-omni-plus:free",
+          "name": "qwen/qwen3.5-omni-plus:free",
+          "kinds": [
+            "general"
+          ],
+          "context_length": 262144,
+          "max_output_tokens": 65536
+        },
+        {
+          "id": "qwen/qwen3-max:free",
+          "name": "qwen/qwen3-max:free",
+          "kinds": [
+            "general"
+          ],
+          "context_length": 262144,
+          "max_output_tokens": 65536
+        },
+        {
+          "id": "qwen/qwen-plus-2025-07-28:free",
+          "name": "qwen/qwen-plus-2025-07-28:free",
+          "kinds": [
+            "general"
+          ],
+          "context_length": 131072,
+          "max_output_tokens": 65536
+        },
+        {
+          "id": "qwen/qwen3-omni-flash:free",
+          "name": "qwen/qwen3-omni-flash:free",
+          "kinds": [
+            "general"
+          ],
+          "context_length": 262144,
+          "max_output_tokens": 65536
+        },
+        {
+          "id": "minimax/minimax-m2.5:free",
+          "name": "minimax/minimax-m2.5:free",
+          "kinds": [
+            "general"
+          ],
+          "context_length": 204800,
+          "max_output_tokens": 65536
+        },
+        {
+          "id": "minimax/minimax-m2:free",
+          "name": "minimax/minimax-m2:free",
+          "kinds": [
+            "general"
+          ],
+          "context_length": 204800,
+          "max_output_tokens": 65536
+        },
+        {
+          "id": "minimax/minimax-m2.7:free",
+          "name": "minimax/minimax-m2.7:free",
+          "kinds": [
+            "general"
+          ],
+          "context_length": 204800,
+          "max_output_tokens": 65536
+        },
+        {
+          "id": "minimax/minimax-m2.5-highspeed:free",
+          "name": "minimax/minimax-m2.5-highspeed:free",
+          "kinds": [
+            "general"
+          ],
+          "context_length": 204800,
+          "max_output_tokens": 65536
+        },
+        {
+          "id": "minimax/minimax-m2.7-highspeed:free",
+          "name": "minimax/minimax-m2.7-highspeed:free",
+          "kinds": [
+            "general"
+          ],
+          "context_length": 204800,
+          "max_output_tokens": 65536
+        },
+        {
+          "id": "minimax/minimax-m2.1:free",
+          "name": "minimax/minimax-m2.1:free",
+          "kinds": [
+            "general"
+          ],
+          "context_length": 204800,
+          "max_output_tokens": 65536
+        }
+      ],
+      "rejected": [
+        {
+          "id": "minimax/minimax-m2.1-highspeed:free",
+          "err": "status 429（上游拒绝；纳新不据此惩罚 key）"
+        },
+        {
+          "id": "qwen/qwen3.8-max:free",
+          "err": "status 429（上游拒绝；纳新不据此惩罚 key）"
+        },
+        {
+          "id": "qwen/qwen3.7-plus:free",
+          "err": "status 429（上游拒绝；纳新不据此惩罚 key）"
+        },
+        {
+          "id": "qwen/qwen3.7-flash:free",
+          "err": "status 429（上游拒绝；纳新不据此惩罚 key）"
+        },
+        {
+          "id": "qwen/qwen3.6-plus:free",
+          "err": "status 429（上游拒绝；纳新不据此惩罚 key）"
+        },
+        {
+          "id": "qwen/qwen3.6-max-preview:free",
+          "err": "status 429（上游拒绝；纳新不据此惩罚 key）"
+        }
+      ]
+    },
+    "xkiro-anthropic": {
+      "verified": [
+        {
+          "id": "qwen/qwen3.8-omni-flash:free",
+          "name": "qwen/qwen3.8-omni-flash:free",
+          "kinds": [
+            "general"
+          ],
+          "context_length": 1000000,
+          "max_output_tokens": 65536
+        },
+        {
+          "id": "qwen/qwen3.5-omni-plus:free",
+          "name": "qwen/qwen3.5-omni-plus:free",
+          "kinds": [
+            "general"
+          ],
+          "context_length": 262144,
+          "max_output_tokens": 65536
+        },
+        {
+          "id": "qwen/qwen3-max:free",
+          "name": "qwen/qwen3-max:free",
+          "kinds": [
+            "general"
+          ],
+          "context_length": 262144,
+          "max_output_tokens": 65536
+        },
+        {
+          "id": "qwen/qwen-plus-2025-07-28:free",
+          "name": "qwen/qwen-plus-2025-07-28:free",
+          "kinds": [
+            "general"
+          ],
+          "context_length": 131072,
+          "max_output_tokens": 65536
+        },
+        {
+          "id": "qwen/qwen3-omni-flash:free",
+          "name": "qwen/qwen3-omni-flash:free",
+          "kinds": [
+            "general"
+          ],
+          "context_length": 262144,
+          "max_output_tokens": 65536
+        },
+        {
+          "id": "minimax/minimax-m2.5:free",
+          "name": "minimax/minimax-m2.5:free",
+          "kinds": [
+            "general"
+          ],
+          "context_length": 204800,
+          "max_output_tokens": 65536
+        },
+        {
+          "id": "minimax/minimax-m2:free",
+          "name": "minimax/minimax-m2:free",
+          "kinds": [
+            "general"
+          ],
+          "context_length": 204800,
+          "max_output_tokens": 65536
+        },
+        {
+          "id": "minimax/minimax-m2.7:free",
+          "name": "minimax/minimax-m2.7:free",
+          "kinds": [
+            "general"
+          ],
+          "context_length": 204800,
+          "max_output_tokens": 65536
+        },
+        {
+          "id": "minimax/minimax-m2.5-highspeed:free",
+          "name": "minimax/minimax-m2.5-highspeed:free",
+          "kinds": [
+            "general"
+          ],
+          "context_length": 204800,
+          "max_output_tokens": 65536
+        },
+        {
+          "id": "minimax/minimax-m2.7-highspeed:free",
+          "name": "minimax/minimax-m2.7-highspeed:free",
+          "kinds": [
+            "general"
+          ],
+          "context_length": 204800,
+          "max_output_tokens": 65536
+        },
+        {
+          "id": "minimax/minimax-m2.1:free",
+          "name": "minimax/minimax-m2.1:free",
+          "kinds": [
+            "general"
+          ],
+          "context_length": 204800,
+          "max_output_tokens": 65536
+        }
+      ],
+      "rejected": [
+        {
+          "id": "minimax/minimax-m2.1-highspeed:free",
+          "err": "status 429（上游拒绝；纳新不据此惩罚 key）"
+        },
+        {
+          "id": "qwen/qwen3.8-max:free",
+          "err": "status 429（上游拒绝；纳新不据此惩罚 key）"
+        },
+        {
+          "id": "qwen/qwen3.7-plus:free",
+          "err": "status 429（上游拒绝；纳新不据此惩罚 key）"
+        },
+        {
+          "id": "qwen/qwen3.7-flash:free",
+          "err": "status 429（上游拒绝；纳新不据此惩罚 key）"
+        },
+        {
+          "id": "qwen/qwen3.6-plus:free",
+          "err": "status 429（上游拒绝；纳新不据此惩罚 key）"
+        },
+        {
+          "id": "qwen/qwen3.6-max-preview:free",
+          "err": "status 429（上游拒绝；纳新不据此惩罚 key）"
+        }
+      ]
+    }
+  }
+}

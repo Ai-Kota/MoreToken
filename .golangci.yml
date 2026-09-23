@@ -1,0 +1,52 @@
+# golangci-lint 配置
+# 运行: golangci-lint run
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    # 基础检查
+    - govet          # 类似 go vet
+    - errcheck        # 检查未处理的 error
+    - staticcheck     # 高级静态分析
+    - unused          # 未使用的代码
+    - gosimple        # 简化代码建议
+
+    # 代码风格
+    - gofmt           # 格式化
+    - goimports       # import 排序
+    - revive          # 代码风格（替代 golint）
+
+    # 复杂度
+    - gocyclo         # 圈复杂度
+    - gocognit        # 认知复杂度
+
+    # 安全
+    - gosec           # 安全检查
+
+linters-settings:
+  gocyclo:
+    min-complexity: 15
+  gocognit:
+    min-complexity: 20
+  govet:
+    enable-all: true
+  revive:
+    rules:
+      - name: exported
+        severity: warning
+      - name: unexported-return
+        severity: warning
+      - name: indent-error-flow
+        severity: warning
+
+issues:
+  max-issues-per-linter: 50
+  max-same-issues: 5
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gosec
+        - errcheck

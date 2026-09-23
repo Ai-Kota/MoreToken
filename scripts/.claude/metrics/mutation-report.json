@@ -1,0 +1,146 @@
+{
+  "total_mutants": 15,
+  "killed_mutants": 15,
+  "survived_mutants": 0,
+  "mutation_score": 100,
+  "mutants": [
+    {
+      "id": "M-934818b0",
+      "file": "cmd\\ai-guard\\assess_maturity.go",
+      "line": 4,
+      "original": "package main\r",
+      "mutated": "\u0026\u0026p\u0026\u0026a\u0026\u0026c\u0026\u0026k\u0026\u0026a\u0026\u0026g\u0026\u0026e\u0026\u0026 \u0026\u0026m\u0026\u0026a\u0026\u0026i\u0026\u0026n\u0026\u0026\r\u0026\u0026",
+      "type": "LOR2",
+      "killed": true
+    },
+    {
+      "id": "M-23d7f53e",
+      "file": "cmd\\ai-guard\\assess_maturity.go",
+      "line": 6,
+      "original": "import (\r",
+      "mutated": "\u0026\u0026i\u0026\u0026m\u0026\u0026p\u0026\u0026o\u0026\u0026r\u0026\u0026t\u0026\u0026 \u0026\u0026(\u0026\u0026\r\u0026\u0026",
+      "type": "LOR2",
+      "killed": true
+    },
+    {
+      "id": "M-eeecad7e",
+      "file": "cmd\\ai-guard\\assess_maturity.go",
+      "line": 7,
+      "original": "\t\"encoding/json\"\r",
+      "mutated": "\t\"encoding*json\"\r",
+      "type": "AOR4",
+      "killed": true
+    },
+    {
+      "id": "M-7600d1f7",
+      "file": "cmd\\ai-guard\\assess_maturity.go",
+      "line": 8,
+      "original": "\t\"fmt\"\r",
+      "mutated": "\u0026\u0026\t\u0026\u0026\"\u0026\u0026f\u0026\u0026m\u0026\u0026t\u0026\u0026\"\u0026\u0026\r\u0026\u0026",
+      "type": "LOR2",
+      "killed": true
+    },
+    {
+      "id": "M-e6590853",
+      "file": "cmd\\ai-guard\\assess_maturity.go",
+      "line": 9,
+      "original": "\t\"os\"\r",
+      "mutated": "\u0026\u0026\t\u0026\u0026\"\u0026\u0026o\u0026\u0026s\u0026\u0026\"\u0026\u0026\r\u0026\u0026",
+      "type": "LOR2",
+      "killed": true
+    },
+    {
+      "id": "M-e773b34a",
+      "file": "cmd\\ai-guard\\assess_maturity.go",
+      "line": 10,
+      "original": "\t\"path/filepath\"\r",
+      "mutated": "\t\"path*filepath\"\r",
+      "type": "AOR4",
+      "killed": true
+    },
+    {
+      "id": "M-807c629b",
+      "file": "cmd\\ai-guard\\assess_maturity.go",
+      "line": 11,
+      "original": "\t\"strings\"\r",
+      "mutated": "\u0026\u0026\t\u0026\u0026\"\u0026\u0026s\u0026\u0026t\u0026\u0026r\u0026\u0026i\u0026\u0026n\u0026\u0026g\u0026\u0026s\u0026\u0026\"\u0026\u0026\r\u0026\u0026",
+      "type": "LOR2",
+      "killed": true
+    },
+    {
+      "id": "M-8ef50bc9",
+      "file": "cmd\\ai-guard\\assess_maturity.go",
+      "line": 12,
+      "original": ")\r",
+      "mutated": "\u0026\u0026)\u0026\u0026\r\u0026\u0026",
+      "type": "LOR2",
+      "killed": true
+    },
+    {
+      "id": "M-770f3beb",
+      "file": "cmd\\ai-guard\\assess_maturity.go",
+      "line": 14,
+      "original": "type MaturityReport struct {\r",
+      "mutated": "\u0026\u0026t\u0026\u0026y\u0026\u0026p\u0026\u0026e\u0026\u0026 \u0026\u0026M\u0026\u0026a\u0026\u0026t\u0026\u0026u\u0026\u0026r\u0026\u0026i\u0026\u0026t\u0026\u0026y\u0026\u0026R\u0026\u0026e\u0026\u0026p\u0026\u0026o\u0026\u0026r\u0026\u0026t\u0026\u0026 \u0026\u0026s\u0026\u0026t\u0026\u0026r\u0026\u0026u\u0026\u0026c\u0026\u0026t\u0026\u0026 \u0026\u0026{\u0026\u0026\r\u0026\u0026",
+      "type": "LOR2",
+      "killed": true
+    },
+    {
+      "id": "M-d4fe9359",
+      "file": "cmd\\ai-guard\\assess_maturity.go",
+      "line": 15,
+      "original": "\tLevel       int              `json:\"level\"`\r",
+      "mutated": "\u0026\u0026\t\u0026\u0026L\u0026\u0026e\u0026\u0026v\u0026\u0026e\u0026\u0026l\u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026i\u0026\u0026n\u0026\u0026t\u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026`\u0026\u0026j\u0026\u0026s\u0026\u0026o\u0026\u0026n\u0026\u0026:\u0026\u0026\"\u0026\u0026l\u0026\u0026e\u0026\u0026v\u0026\u0026e\u0026\u0026l\u0026\u0026\"\u0026\u0026`\u0026\u0026\r\u0026\u0026",
+      "type": "LOR2",
+      "killed": true
+    },
+    {
+      "id": "M-0756e4bf",
+      "file": "cmd\\ai-guard\\assess_maturity.go",
+      "line": 16,
+      "original": "\tLevelName   string           `json:\"level_name\"`\r",
+      "mutated": "\u0026\u0026\t\u0026\u0026L\u0026\u0026e\u0026\u0026v\u0026\u0026e\u0026\u0026l\u0026\u0026N\u0026\u0026a\u0026\u0026m\u0026\u0026e\u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026s\u0026\u0026t\u0026\u0026r\u0026\u0026i\u0026\u0026n\u0026\u0026g\u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026`\u0026\u0026j\u0026\u0026s\u0026\u0026o\u0026\u0026n\u0026\u0026:\u0026\u0026\"\u0026\u0026l\u0026\u0026e\u0026\u0026v\u0026\u0026e\u0026\u0026l\u0026\u0026_\u0026\u0026n\u0026\u0026a\u0026\u0026m\u0026\u0026e\u0026\u0026\"\u0026\u0026`\u0026\u0026\r\u0026\u0026",
+      "type": "LOR2",
+      "killed": true
+    },
+    {
+      "id": "M-a7b3b6d8",
+      "file": "cmd\\ai-guard\\assess_maturity.go",
+      "line": 17,
+      "original": "\tScore       int              `json:\"score\"`\r",
+      "mutated": "\u0026\u0026\t\u0026\u0026S\u0026\u0026c\u0026\u0026o\u0026\u0026r\u0026\u0026e\u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026i\u0026\u0026n\u0026\u0026t\u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026`\u0026\u0026j\u0026\u0026s\u0026\u0026o\u0026\u0026n\u0026\u0026:\u0026\u0026\"\u0026\u0026s\u0026\u0026c\u0026\u0026o\u0026\u0026r\u0026\u0026e\u0026\u0026\"\u0026\u0026`\u0026\u0026\r\u0026\u0026",
+      "type": "LOR2",
+      "killed": true
+    },
+    {
+      "id": "M-36441016",
+      "file": "cmd\\ai-guard\\assess_maturity.go",
+      "line": 18,
+      "original": "\tMaxScore    int              `json:\"max_score\"`\r",
+      "mutated": "\u0026\u0026\t\u0026\u0026M\u0026\u0026a\u0026\u0026x\u0026\u0026S\u0026\u0026c\u0026\u0026o\u0026\u0026r\u0026\u0026e\u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026i\u0026\u0026n\u0026\u0026t\u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026`\u0026\u0026j\u0026\u0026s\u0026\u0026o\u0026\u0026n\u0026\u0026:\u0026\u0026\"\u0026\u0026m\u0026\u0026a\u0026\u0026x\u0026\u0026_\u0026\u0026s\u0026\u0026c\u0026\u0026o\u0026\u0026r\u0026\u0026e\u0026\u0026\"\u0026\u0026`\u0026\u0026\r\u0026\u0026",
+      "type": "LOR2",
+      "killed": true
+    },
+    {
+      "id": "M-b6928fff",
+      "file": "cmd\\ai-guard\\assess_maturity.go",
+      "line": 19,
+      "original": "\tDetails     []MaturityDetail `json:\"details\"`\r",
+      "mutated": "\u0026\u0026\t\u0026\u0026D\u0026\u0026e\u0026\u0026t\u0026\u0026a\u0026\u0026i\u0026\u0026l\u0026\u0026s\u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026[\u0026\u0026]\u0026\u0026M\u0026\u0026a\u0026\u0026t\u0026\u0026u\u0026\u0026r\u0026\u0026i\u0026\u0026t\u0026\u0026y\u0026\u0026D\u0026\u0026e\u0026\u0026t\u0026\u0026a\u0026\u0026i\u0026\u0026l\u0026\u0026 \u0026\u0026`\u0026\u0026j\u0026\u0026s\u0026\u0026o\u0026\u0026n\u0026\u0026:\u0026\u0026\"\u0026\u0026d\u0026\u0026e\u0026\u0026t\u0026\u0026a\u0026\u0026i\u0026\u0026l\u0026\u0026s\u0026\u0026\"\u0026\u0026`\u0026\u0026\r\u0026\u0026",
+      "type": "LOR2",
+      "killed": true
+    },
+    {
+      "id": "M-0c7aacec",
+      "file": "cmd\\ai-guard\\assess_maturity.go",
+      "line": 20,
+      "original": "\tHooks       []string         `json:\"recommended_hooks\"`\r",
+      "mutated": "\u0026\u0026\t\u0026\u0026H\u0026\u0026o\u0026\u0026o\u0026\u0026k\u0026\u0026s\u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026[\u0026\u0026]\u0026\u0026s\u0026\u0026t\u0026\u0026r\u0026\u0026i\u0026\u0026n\u0026\u0026g\u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026 \u0026\u0026`\u0026\u0026j\u0026\u0026s\u0026\u0026o\u0026\u0026n\u0026\u0026:\u0026\u0026\"\u0026\u0026r\u0026\u0026e\u0026\u0026c\u0026\u0026o\u0026\u0026m\u0026\u0026m\u0026\u0026e\u0026\u0026n\u0026\u0026d\u0026\u0026e\u0026\u0026d\u0026\u0026_\u0026\u0026h\u0026\u0026o\u0026\u0026o\u0026\u0026k\u0026\u0026s\u0026\u0026\"\u0026\u0026`\u0026\u0026\r\u0026\u0026",
+      "type": "LOR2",
+      "killed": true
+    }
+  ],
+  "duration": "21.676s",
+  "passed": true,
+  "project_type": "go"
+}

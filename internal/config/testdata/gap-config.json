@@ -1,0 +1,16 @@
+{
+  "listen": ":8462",
+  "_comment": "供给面断言的反证夹具：只覆盖 reasoning，coding/general/fast 无人提供 ⇒ 必须判致命缺口。刻意留一个真 key 字面值（非指针）以便 Load 无需 vault。",
+  "providers": [
+    {
+      "id": "only-reasoning",
+      "base_url": "https://example.invalid/v1",
+      "format": "anthropic",
+      "tier": "free",
+      "keys": ["sk-not-a-real-key"],
+      "models": [
+        { "id": "m", "name": "M", "kinds": ["reasoning"] }
+      ]
+    }
+  ]
+}

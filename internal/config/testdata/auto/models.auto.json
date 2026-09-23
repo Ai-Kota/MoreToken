@@ -1,0 +1,15 @@
+{
+  "generated_at": "2026-09-20T09:00:00Z",
+  "providers": {
+    "p": {
+      "verified": [
+        { "id": "discovered", "name": "discovered", "kinds": ["reasoning", "coding"] },
+        { "id": "dup", "name": "dup" },
+        { "id": "preferred", "name": "preferred" }
+      ]
+    },
+    "not-in-config": {
+      "verified": [{ "id": "ghost", "name": "ghost" }]
+    }
+  }
+}
