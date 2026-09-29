@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"moretoken/internal/auth"
 	"moretoken/internal/config"
 	"moretoken/internal/metrics"
 	"moretoken/internal/provider"
@@ -51,6 +52,10 @@ type Server struct {
 	// 成功请求"值得留痕"的两条线（NewServer 设默认；测试可调小）。
 	slowThreshold  time.Duration
 	largeThreshold int
+
+	// auth 入站 token 校验面（nil = 未配置鉴权，行为与 T-024 之前完全一致）。
+	// 只经 WithAuth 注入；校验逻辑在 auth_middleware.go。
+	auth *auth.Store
 }
 
 // SlowRequestThreshold / LargeBodyThreshold 成功路径留痕的两条线。
@@ -90,6 +95,12 @@ func NewServer(r *router.Router, cfg *config.Config, log *DecisionLog) *Server {
 func (s *Server) WithMetrics(w *metrics.Window, escalateAfter time.Duration) *Server {
 	s.mwin = w
 	s.escalateAfter = escalateAfter
+	return s
+}
+
+// WithAuth 挂上入站 token 校验面（可链式，T-024）。不挂 = 零鉴权，行为与以前完全一致。
+func (s *Server) WithAuth(store *auth.Store) *Server {
+	s.auth = store
 	return s
 }
 
@@ -141,7 +152,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/models", s.models)
 	mux.HandleFunc("/health", s.health)
 	mux.HandleFunc("/doctor", s.doctor)
-	return mux
+	if !s.authEnabled() {
+		return mux // 未配置鉴权：路由表原样返回，零行为变化
+	}
+	return s.authMiddleware(mux)
 }
 
 // chatHandler 处理一次聊天请求：读 body → 判断流式 → router.Route → 透传。
@@ -262,6 +276,7 @@ func (s *Server) chatHandler(format config.Format) http.HandlerFunc {
 						ProviderID: "router", Reason: ferr.Error(),
 						Status: http.StatusNotFound,
 						Want:   probe.Model, Attempts: res.Attempts,
+						Auth: AuthNameFromContext(req.Context()),
 					})
 				}
 				http.Error(w, msg, http.StatusNotFound)
@@ -286,6 +301,7 @@ func (s *Server) chatHandler(format config.Format) http.HandlerFunc {
 						ProviderID: "router", Reason: ferr.Error(),
 						Status: http.StatusBadRequest,
 						Want:   probe.Model, Attempts: res.Attempts,
+						Auth: AuthNameFromContext(req.Context()),
 					})
 				}
 				http.Error(w, msg, http.StatusBadRequest)
@@ -312,6 +328,7 @@ func (s *Server) chatHandler(format config.Format) http.HandlerFunc {
 					Want:       probe.Model, // 请求的 model 原文，便于反查"是什么被拒了"
 					// 逐个候选的失败原因：这是"是谁坏的、怎么坏的"的唯一载体。
 					Attempts: res.Attempts,
+					Auth:     AuthNameFromContext(req.Context()),
 				})
 			}
 			status = http.StatusServiceUnavailable
@@ -323,6 +340,7 @@ func (s *Server) chatHandler(format config.Format) http.HandlerFunc {
 			if virtual {
 				e.Model, e.Want = res.Model, probe.Model
 			}
+			e.Auth = AuthNameFromContext(req.Context())
 			// 成功也要能证明"修复生效"：超阈值的慢/大请求留痕（见 noteIfNoteworthy）。
 			s.noteIfNoteworthy(time.Since(start), len(body), &e)
 			s.declog.Record(e)

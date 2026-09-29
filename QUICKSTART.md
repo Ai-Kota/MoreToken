@@ -191,6 +191,58 @@ If everything works, you'll get a proper chat completion response routed through
 
 ---
 
+## 7. Secure the Gateway (Token Auth)
+
+By default the gateway accepts all requests — fine for localhost-only use.
+If the port is reachable from your LAN, issue tokens (one per client) so that
+strangers can't spend your upstream keys:
+
+```bash
+# Issue a token. The plaintext goes straight into the vault (never echoed,
+# never touches disk); config/tokens.json only stores a SHA-256 hash + pointer.
+./bin/moretoken -token-gen -token-name my-laptop
+
+# Every client gets its own token (independent revocation + audit trail):
+./bin/moretoken -token-gen -token-name dify-box -token-ttl 720h
+
+# No vault on this machine? Explicit fallback — plaintext is shown ONCE:
+./bin/moretoken -token-gen -token-name guest -token-plain
+```
+
+Restart the gateway once to pick up auth (from then on, revoke/rotate
+hot-reload — no restart needed):
+
+```bash
+./bin/moretoken -config config.json
+# → auth: 入站 token 校验已启用（/health 豁免）
+```
+
+**Connect agents via the vault pointer** (zero plaintext in any config file):
+
+```bash
+vault env ANTHROPIC_AUTH_TOKEN=moretoken/tokens/my-laptop -- claude
+vault env OPENAI_API_KEY=moretoken/tokens/dify-box -- python my_agent.py
+
+# UI platforms (Dify/n8n): fetch once and paste into their own secret store
+vault get moretoken/tokens/dify-box
+```
+
+**Lifecycle management:**
+
+```bash
+./bin/moretoken -token-list                      # who has a token, status, last used
+./bin/moretoken -token-revoke -token-name guest  # takes effect on the NEXT request
+./bin/moretoken -token-rotate -token-name my-laptop  # new secret into vault, pointer unchanged
+```
+
+Notes:
+- `/health` is always exempt (liveness probes must never be blocked); everything else including `/v1/models` and `/decisions` requires a token.
+- Both header styles work: `Authorization: Bearer mt_…` (OpenAI clients) and `x-api-key: mt_…` (Anthropic clients).
+- Tokens expire after 30 days by default (`-token-ttl 0` = never, explicit choice only).
+- The single-token `auth_token` field in config.json (supports `env:`/`vault:` prefixes) is a compatibility mode; tokens.json takes precedence.
+
+---
+
 ## Common Scenarios
 
 ### Using environment variables for keys

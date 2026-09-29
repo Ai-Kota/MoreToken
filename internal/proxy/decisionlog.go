@@ -39,6 +39,13 @@ type DecisionEntry struct {
 	// "**是谁坏的、怎么坏的**"。2026-09-21 实测有 7 次突发降级、其中一次三个候选
 	// 同时失败——而当时的留痕一个字都没记，那个问题至今【未核实】。
 	Attempts []router.Attempt `json:"attempts,omitempty"`
+
+	// Auth 本次请求的入站 token name（T-024，未配置鉴权时为空）。
+	//
+	// 为什么要有：多客户端共用网关后，"异常用量/异常失败是谁发的"必须可定位
+	// （矩阵 TH5）。401 拒绝路径由中间件直接 Record（ProviderID="auth"）；
+	// 本字段填在经过鉴权的业务路径上，与 ProviderID 正交。
+	Auth string `json:"auth,omitempty"`
 }
 
 // DecisionLog 有界 ring buffer（决策日志 / 切换留痕）。

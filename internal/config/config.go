@@ -98,7 +98,16 @@ type Provider struct {
 
 // Config 顶层配置。
 type Config struct {
-	Listen    string     `json:"listen"`
+	Listen string `json:"listen"`
+
+	// AuthToken 单 token 简化鉴权（T-024 兼容模式）。支持字面量 / env:VAR / vault:PATH
+	// 三种形态（与 keys 同款，经 ResolveKeys 一并解析）。
+	//
+	// 优先级：config/tokens.json 存在且有活跃条目 ⇒ 多 token 模式（本字段被忽略）；
+	// 否则本字段非空 ⇒ 单 token 模式；两者皆空 ⇒ 不鉴权（T-024 之前的行为，零变化）。
+	// 正式部署建议用 -token-gen 走多 token 模式（吊销/过期/审计/每客户端独立身份）。
+	AuthToken string `json:"auth_token,omitempty"`
+
 	Providers []Provider `json:"providers"`
 
 	// AutoAdded 本次加载从 models.auto.json 追加进来的模型条数（不参与序列化）。
@@ -177,6 +186,34 @@ func (c *Config) ResolveKeys(ctx context.Context, resolve Resolver) KeyReport {
 	}
 	var rep KeyReport
 	cache := map[string]string{} // path → 明文（"" 表示负缓存）
+
+	// AuthToken（单 token 兼容模式）先解析：与 keys 同款 env:/vault:/字面量 三形态。
+	// 解析失败不 fatal（保留原值），但**必须留痕**——一个解析不出来的 auth_token
+	// 会让网关拿占位符当 token 校验，合法客户端全 401 而现象指向"客户端配置错"。
+	if c.AuthToken != "" {
+		switch {
+		case strings.HasPrefix(c.AuthToken, PrefixEnv):
+			name := c.AuthToken[len(PrefixEnv):]
+			if v := strings.TrimSpace(os.Getenv(name)); v != "" {
+				c.AuthToken = v
+			} else {
+				rep.Details = append(rep.Details, fmt.Sprintf("auth_token: env:%s 未设置（鉴权将拒绝所有请求）", name))
+			}
+		case strings.HasPrefix(c.AuthToken, PrefixVault):
+			path := c.AuthToken[len(PrefixVault):]
+			v, err := resolve(ctx, path)
+			if err != nil || strings.TrimSpace(v) == "" {
+				reason := "返回空值"
+				if err != nil {
+					reason = err.Error()
+				}
+				rep.Details = append(rep.Details,
+					fmt.Sprintf("auth_token: vault:%s (%s)（鉴权将拒绝所有请求）", path, reason))
+			} else {
+				c.AuthToken = strings.TrimSpace(v)
+			}
+		}
+	}
 
 	for i := range c.Providers {
 		p := &c.Providers[i]

@@ -20,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	"moretoken/internal/auth"
 	"moretoken/internal/catalog"
 	"moretoken/internal/config"
 	"moretoken/internal/metrics"
@@ -53,10 +54,31 @@ func main() {
 	flag.BoolVar(&doctor, "doctor", false, "（客户端模式）读运行中网关的 /doctor 并据结果决定退出码，不启动服务")
 	var doctorURL string
 	flag.StringVar(&doctorURL, "doctor-url", "http://127.0.0.1:8462/doctor", "（客户端模式）/doctor 地址")
+
+	// ---- Token 管理子命令（T-024：发放面，做完即退，不启动服务）----
+	var tokenGen, tokenList, tokenRevoke, tokenRotate bool
+	flag.BoolVar(&tokenGen, "token-gen", false, "生成入站 token（明文直入 vault，不回显；-token-plain 例外）后退出")
+	flag.BoolVar(&tokenList, "token-list", false, "列出已登记 token（状态/过期/最后使用）后退出")
+	flag.BoolVar(&tokenRevoke, "token-revoke", false, "吊销 -token-name 指定的 token（网关热加载，下一请求即拒）后退出")
+	flag.BoolVar(&tokenRotate, "token-rotate", false, "轮换 -token-name 指定的 token（新值入墙、指针不变、旧值即废）后退出")
+	var tokenName string
+	flag.StringVar(&tokenName, "token-name", "", "token 名（每客户端一个；gen 必填，revoke/rotate 指定目标）")
+	var tokenTTL time.Duration
+	flag.DurationVar(&tokenTTL, "token-ttl", auth.DefaultTTL, "token 有效期（默认 30 天；0 = 永不过期，须显式选择）")
+	var tokenPlain bool
+	flag.BoolVar(&tokenPlain, "token-plain", false, "无 vault 模式：明文回显一次、不入墙（自担保管；默认禁止）")
+	var tokensFile string
+	flag.StringVar(&tokensFile, "tokens-file", "", "tokens.json 路径（默认 <config 同目录>/tokens.json）")
 	flag.Parse()
 
 	if doctor {
 		os.Exit(runDoctorClient(doctorURL))
+	}
+
+	// token 子命令在 config.Load **之前**分发：发放面不依赖 provider 配置是否完好
+	// （config 坏了也要能吊销 token——那可能正是止损操作）。
+	if n := pickTokenCommand(tokenGen, tokenList, tokenRevoke, tokenRotate); n != "" {
+		os.Exit(runTokenCLI(n, tokenName, tokenTTL, tokenPlain, tokensFile, configPath))
 	}
 
 	cfg, err := config.Load(configPath)
@@ -156,10 +178,18 @@ func main() {
 	)
 	srv := proxy.NewServer(rt, cfg, declog).WithMetrics(mwin, escalateAfter)
 
+	// 入站鉴权（T-024）：tokens.json > config.auth_token > 不鉴权（nil = 零行为变化）。
+	if authStore := buildAuthStore(defaultTokensFile(tokensFile, configPath), cfg); authStore != nil {
+		srv = srv.WithAuth(authStore)
+		log.Printf("auth: 入站 token 校验已启用（/health 豁免；吊销/轮换经热加载下一请求生效）")
+	}
+
 	// /decisions 端点：暴露最近决策留痕（密钥安全——无 key 值）。
+	// 注册在外层 mux 上、不经 srv.Handler()，须单独 AuthWrap 才同样受保护（T-024：
+	// 决策日志含路由情报，默认保护、宁严勿松）。
 	mux := http.NewServeMux()
 	mux.Handle("/", srv.Handler())
-	mux.HandleFunc("/decisions", func(w http.ResponseWriter, req *http.Request) {
+	mux.Handle("/decisions", srv.AuthWrap(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		n := 100
 		if v := req.URL.Query().Get("n"); v != "" {
 			if p, err := strconv.Atoi(v); err == nil && p > 0 {
@@ -168,7 +198,7 @@ func main() {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(declog.Recent(n))
-	})
+	})))
 
 	httpSrv := &http.Server{Addr: listen, Handler: mux}
 
@@ -193,6 +223,81 @@ func main() {
 	if err := httpSrv.ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatalf("serve: %v", err)
 	}
+}
+
+// pickTokenCommand 四个布尔开关 → 至多一个子命令名。
+// 多个同时给 → 报错退出（flag 包不做互斥，这里补上：歧义指令必须响）。
+func pickTokenCommand(gen, list, revoke, rotate bool) string {
+	var picked []string
+	switch {
+	case gen:
+		picked = append(picked, "gen")
+	case list:
+		picked = append(picked, "list")
+	case revoke:
+		picked = append(picked, "revoke")
+	case rotate:
+		picked = append(picked, "rotate")
+	}
+	// 上面的 switch-case 只会命中一个；再数一遍防未来改成 if 链时漏互斥。
+	n := 0
+	for _, b := range []bool{gen, list, revoke, rotate} {
+		if b {
+			n++
+		}
+	}
+	if n > 1 {
+		log.Fatalf("token 子命令互斥：-token-gen/-token-list/-token-revoke/-token-rotate 只能给一个")
+	}
+	if len(picked) == 1 {
+		return picked[0]
+	}
+	return ""
+}
+
+// defaultTokensFile -tokens-file 缺省 = config 同目录的 tokens.json。
+// CLI 与网关启动**必须**用同一函数算落点——两边指到不同文件的话，
+// 吊销/轮换就"不生效"了（而且是静默不生效，最难排查的那类）。
+func defaultTokensFile(tokensFile, configPath string) string {
+	if tokensFile != "" {
+		return tokensFile
+	}
+	return filepath.Join(filepath.Dir(configPath), "tokens.json")
+}
+
+// runTokenCLI 发放面子命令入口。
+func runTokenCLI(cmd, name string, ttl time.Duration, plain bool, tokensFile, configPath string) int {
+	tokensFile = defaultTokensFile(tokensFile, configPath)
+	return auth.CLI{
+		Command: cmd, Name: name, TTL: ttl, Plain: plain,
+		TokensFile: tokensFile, Out: os.Stdout,
+	}.Run()
+}
+
+// buildAuthStore 启动时组装校验面（T-024 优先级：tokens.json > config.auth_token > 不鉴权）。
+//
+// 返回 nil = 未配置鉴权，行为与 T-024 之前完全一致（不挂中间件、零开销）。
+// 单 token 兼容模式只在 auth_token **已成功解析**时启用——解析失败还拿占位符
+// 去校验的话，合法客户端全 401 而现象指向"客户端配错了"，那是最坏的排查体验；
+// 此时宁可退回不鉴权 + ResolveKeys 已打过的 WARN（失败必须响，响过之后不再叠坑）。
+func buildAuthStore(tokensFile string, cfg *config.Config) *auth.Store {
+	store, err := auth.LoadStore(tokensFile, auth.WithLogger(log.Printf))
+	if err != nil {
+		log.Fatalf("load tokens %s: %v", tokensFile, err) // 声明了却坏了 → 启动即炸，不静默
+	}
+	if store.HasEntries() {
+		return store
+	}
+	tok := cfg.AuthToken
+	if tok != "" && !strings.HasPrefix(tok, config.PrefixEnv) && !strings.HasPrefix(tok, config.PrefixVault) {
+		return auth.InMemoryStore([]auth.Entry{{
+			Name: "auth_token", Hash: auth.Hash(tok), Created: time.Now(),
+		}}, auth.WithLogger(log.Printf))
+	}
+	if tok != "" {
+		log.Printf("WARN auth_token 未解析成功（仍是 %s 指针），本次启动**不鉴权**——见上方 unresolved 明细", tok)
+	}
+	return nil
 }
 
 // runDoctorClient 「自愈承诺超时」升级判据的客户端：读运行中网关的 /doctor。
