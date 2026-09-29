@@ -119,6 +119,20 @@
 - **I20 吊销经目录挂载 <5s 生效**：单文件挂载会因 rename 换 inode 被容器钉死 → 吊销永久失效且静默（评审 S1）；目录挂载 + mtime 热加载修正
 - **I21 开机零手动**：restart:always + Docker Desktop AutoStart；手动 docker kill/stop 不立即自愈是 Docker 既定语义（daemon 重启才应用 always），非缺陷
 
+### F11 流式错误状态码（T-027 新增）
+
+> 缺陷实证：2026-09-29 容器日志 10 分钟 3 次 `superfluous WriteHeader(proxy.go:307)`，
+> 全部来自用户真实 cc-ft 会话。载体：`internal/proxy/streamerror_test.go`（5 用例，
+> 修复前先红后绿 + 变异检验过：回贴早 flush 三用例复红）。
+
+| 正常 | 空 | 错误 | 边界 | 时序 |
+|------|----|------|------|------|
+| 流式成功：200+SSE 头随**首块**上线，data 帧逐块透传（wire 与修复前同构） | 流式空流（上游 2xx 零块）→ 显式状态码+SSE 头 | 流式路由失败 → **wire 上真实状态码**：404(not_found_error)/400(prompt is too long)/503(exhausted)，绝非 200+破碎流（**I22**） | 首块前=可撤回（错误路径状态码可达）；首块后=不可撤回（FailStreamMid 走成功路径透传，不经 http.Error） | ferr≠nil ⟹ 零块已发（provider/router 语义核实：≥400 在流开始前转 Fail；流中断 done=true） |
+
+**I22 首块前不上 200**：SSE 头可预设、**不得提前 Flush**——flush 即 200 上线，此后一切
+错误路径的状态码都到不了客户端，T-023 的 /compact、/model 提示在流式路径（Claude Code
+100% 流式）全部失效。真身验证：`stream:true` + 不存在模型 → wire 404 + not_found_error。
+
 ## 3. 契约 fixtures（真实捕获）
 
 > 真实上游样本固化，测试从契约生成，不从写的代码推断。

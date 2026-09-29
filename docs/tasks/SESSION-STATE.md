@@ -9,10 +9,10 @@
 
 | 字段 | 值 |
 |------|------|
-| **会话日期** | 2026-09-29 12:57:23 |
-| **执行任务** | T-026 |
+| **会话日期** | 2026-09-29 13:33:08 |
+| **执行任务** | T-027 |
 | **完成状态** | ✅ 进行中 |
-| **会话摘要** | 首部署全绿：镜像构建成功（nats sha256 校验+musl 兼容）、mt-verify 15 PASS/0 FAIL（鉴权/豁免/双头/真实chat/审计/吊销2.5s传播/restart自愈/进程退出restart:always拉起RC0→1/NATS发布）、cc-ft真实链路 laptop-cc→容器200、dev-fleet guard干净。git 卫生：docker/runtime/+config/tokens.json gitignore（运行态）、git rm 孤儿 config/tokens.json。文档：QUICKSTART §8 + TEST-MATRIX F10/I16-I21 + T-026真身结果+验收。test-all 全量回归绿。验证脚本自身修3个测试bug（docker kill是手动停止不触发restart属Docker语义→改TERM自然退出；bc缺失；NATS窗口太短）。#12机器重启待用户验 |
+| **会话摘要** | 修复完成：删 Route 前早 flush（SSE 头保留预设）、首块 Write+Flush 才发 200、空流显式 WriteHeader。契约测试先红（wire 200 与诊断逐字一致）后绿；变异检验过（回贴早 flush 三用例复红）；test-all 全量绿。成功路径 wire 行为不变（④⑤旧代码即绿+修复后仍绿） |
 
 ---
 
@@ -24,22 +24,15 @@
 
 | 任务ID | 进度 | 停在哪里 | 下一步 |
 |:------:|:----:|---------|--------|
-| T-026 | 🔄 | 上次会话中断 | 继续执行 |
+| T-027 | 🔄 | 上次会话中断 | 继续执行 |
 
 ### 未完成的修改
 
 | 文件 | 修改内容 | 是否已提交 |
 |------|---------|:---------:|
-| .gitignore | （待确认） | ⬜ |
-| QUICKSTART.md | （待确认） | ⬜ |
 | config/models.auto.json | （待确认） | ⬜ |
-| config/tokens.json | （待确认） | ⬜ |
-| docs/quality/TEST-MATRIX.md | （待确认） | ⬜ |
-| docs/tasks/SESSION-STATE.md | （待确认） | ⬜ |
 | docs/tasks/TASKS.md | （待确认） | ⬜ |
-| internal/auth/store.go | （待确认） | ⬜ |
-| internal/auth/store_test.go | （待确认） | ⬜ |
-| main.go | （待确认） | ⬜ |
+| internal/proxy/proxy.go | （待确认） | ⬜ |
 
 ### 待决策项
 
@@ -63,7 +56,7 @@
 
 ### 项目当前状态
 
-首部署全绿：镜像构建成功（nats sha256 校验+musl 兼容）、mt-verify 15 PASS/0 FAIL（鉴权/豁免/双头/真实chat/审计/吊销2.5s传播/restart自愈/进程退出restart:always拉起RC0→1/NATS发布）、cc-ft真实链路 laptop-cc→容器200、dev-fleet guard干净。git 卫生：docker/runtime/+config/tokens.json gitignore（运行态）、git rm 孤儿 config/tokens.json。文档：QUICKSTART §8 + TEST-MATRIX F10/I16-I21 + T-026真身结果+验收。test-all 全量回归绿。验证脚本自身修3个测试bug（docker kill是手动停止不触发restart属Docker语义→改TERM自然退出；bc缺失；NATS窗口太短）。#12机器重启待用户验
+修复完成：删 Route 前早 flush（SSE 头保留预设）、首块 Write+Flush 才发 200、空流显式 WriteHeader。契约测试先红（wire 200 与诊断逐字一致）后绿；变异检验过（回贴早 flush 三用例复红）；test-all 全量绿。成功路径 wire 行为不变（④⑤旧代码即绿+修复后仍绿）
 
 ### 关键约定
 
@@ -79,4 +72,4 @@
 
 | 日期 | 任务 | 成果 | 问题 |
 |------|------|------|------|
-| 2026-09-29 | T-026 | 首部署全绿：镜像构... | |
+| 2026-09-29 | T-027 | 修复完成：删 Route �... | |

@@ -229,13 +229,24 @@ func (s *Server) chatHandler(format config.Format) http.HandlerFunc {
 
 		stream := kind == provider.Streaming
 		if stream {
+			// SSE 头可以先设，但**绝不提前 Flush**（T-027）。
+			//
+			// Flush = 200 立刻上线。那之后路由再失败（404 模型不存在 / 400 上下文超限 /
+			// 503 池耗尽），http.Error 的 WriteHeader 就是 superfluous——**真实状态码
+			// 到不了客户端**，Claude Code（100% 流式）收到 `200 + SSE 头 + 裸错误 JSON`
+			// 的破碎流，T-023 的 /compact、/model 提示全部失效。
+			// 2026-09-29 容器日志实证：10 分钟 3 次 superfluous WriteHeader(proxy.go:307)，
+			// 全部来自用户真实会话撞上下文超限。
+			//
+			// 头随**第一个数据块**发出（首 Write 隐式 WriteHeader(200)）：成功路径 wire
+			// 行为不变，错误路径拿回真状态码。早 flush 从未保护过什么——路由期间客户端
+			// 等的是事件不是头，60s 流空闲计时照跑。
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.Header().Set("Cache-Control", "no-cache")
 			w.Header().Set("Connection", "keep-alive")
-			if fl, ok := w.(http.Flusher); ok {
-				fl.Flush()
-			}
 		}
+		// 首块是否已上线（=200 已不可撤回）。Route 同步调用 StreamCB，无并发。
+		wroteChunk := false
 
 		res, ferr := s.r.Route(req.Context(), router.RouteRequest{
 			Format:       format,
@@ -246,6 +257,8 @@ func (s *Server) chatHandler(format config.Format) http.HandlerFunc {
 			StreamCB: func(chunk []byte) {
 				if stream {
 					// 原样透传 SSE 数据块（provider 已剥 data: 前缀；这里补回线格式）。
+					// 首块的 Write+Flush 才真正把 200+SSE 头送上线（T-027：不提前 flush）。
+					wroteChunk = true
 					fmt.Fprintf(w, "data: %s\n\n", chunk)
 					if fl, ok := w.(http.Flusher); ok {
 						fl.Flush()
@@ -347,6 +360,11 @@ func (s *Server) chatHandler(format config.Format) http.HandlerFunc {
 		}
 		status = res.StatusCode
 		if stream {
+			if !wroteChunk {
+				// 空流（上游 2xx 但零数据块）或流中断后候选透传：显式发状态码，
+				// 让预设的 SSE 头随之上线——不依赖 handler 返回时的隐式 200 空响应。
+				w.WriteHeader(res.StatusCode)
+			}
 			return // 流已在 StreamCB 里逐块写完
 		}
 		w.Header().Set("Content-Type", "application/json")
