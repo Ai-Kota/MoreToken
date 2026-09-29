@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -69,10 +70,19 @@ func main() {
 	flag.BoolVar(&tokenPlain, "token-plain", false, "无 vault 模式：明文回显一次、不入墙（自担保管；默认禁止）")
 	var tokensFile string
 	flag.StringVar(&tokensFile, "tokens-file", "", "tokens.json 路径（默认 <config 同目录>/tokens.json）")
+	var materializeConfig string
+	flag.StringVar(&materializeConfig, "materialize-config", "",
+		"（宿主部署工具）解析 config 里全部 env:/vault: 指针后输出**完整明文 config** 到 <path>（`-`=stdout），然后退出。"+
+			"供 Docker 部署：容器内没有 vault.exe，解析必须发生在宿主（T-026）。输出物含全部密钥明文——只许进命名卷/管道，严禁入 git")
 	flag.Parse()
 
 	if doctor {
 		os.Exit(runDoctorClient(doctorURL))
+	}
+
+	// materialize 在 config.Load 之后、其他一切之前分发（它自己 Load，不共享后续流程）。
+	if materializeConfig != "" {
+		os.Exit(runMaterializeConfig(configPath, materializeConfig))
 	}
 
 	// token 子命令在 config.Load **之前**分发：发放面不依赖 provider 配置是否完好
@@ -179,7 +189,10 @@ func main() {
 	srv := proxy.NewServer(rt, cfg, declog).WithMetrics(mwin, escalateAfter)
 
 	// 入站鉴权（T-024）：tokens.json > config.auth_token > 不鉴权（nil = 零行为变化）。
-	if authStore := buildAuthStore(defaultTokensFile(tokensFile, configPath), cfg); authStore != nil {
+	// tokensFile != "" 表示**显式指定**——此时文件缺失必须炸（fail-closed，T-026）：
+	// 容器 CMD 写死了 -tokens-file，若挂载错位而这里静默回落"不鉴权"，
+	// 就会得到一个 healthcheck 全绿的裸奔网关（评审 S3：最坏失败模式是安静的）。
+	if authStore := buildAuthStore(defaultTokensFile(tokensFile, configPath), tokensFile != "", cfg); authStore != nil {
 		srv = srv.WithAuth(authStore)
 		log.Printf("auth: 入站 token 校验已启用（/health 豁免；吊销/轮换经热加载下一请求生效）")
 	}
@@ -274,16 +287,83 @@ func runTokenCLI(cmd, name string, ttl time.Duration, plain bool, tokensFile, co
 	}.Run()
 }
 
+// runMaterializeConfig 宿主侧部署工具（T-026）：把 config 里全部 env:/vault: 指针
+// 解析成明文，输出**完整可独立运行**的 config JSON。
+//
+// 为什么必须有它：容器里没有 vault.exe（Windows 二进制、DB 在宿主），
+// 而 90 把 key 全是 vault: 指针。解析只能发生在宿主——复用**已测试的** ResolveKeys
+// （去重、负缓存、总预算），不在 shell 里重新发明一遍。
+//
+// 部署闸语义：任何一把 key 解析失败 → 非零退出，**不输出半成品**。
+// 容器里无法补解析，残缺 config 上船 = 那个池静默无凭据（503），
+// 而现象会指向"上游挂了"——错误方向的排查最贵。
+//
+// 输出物含全部密钥明文：`-`（stdout）模式供管道直投 Docker 卷（明文不落宿主磁盘）；
+// 写文件模式仅限受控路径，用完即删。**任何情况下不得进 git。**
+func runMaterializeConfig(configPath, out string) int {
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "materialize: load config: %v\n", err)
+		return 1
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), config.DefaultVaultTimeout)
+	defer cancel()
+	rep := cfg.ResolveKeys(ctx, nil)
+	if rep.Unresolved > 0 {
+		fmt.Fprintf(os.Stderr, "materialize: %d 把 key 解析失败，拒绝输出半成品 config：\n", rep.Unresolved)
+		for _, d := range rep.Details {
+			fmt.Fprintf(os.Stderr, "  - %s\n", d)
+		}
+		return 1
+	}
+	raw, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "materialize: marshal: %v\n", err)
+		return 1
+	}
+	raw = append(raw, '\n')
+
+	if out == "-" {
+		// stdout 模式：只写数据，任何诊断都进 stderr（管道对端拿到的是纯净 JSON）。
+		// EPIPE（对端提前退出）→ 非零；Go 对 fd1 的 SIGPIPE 默认直接杀进程（退出 141），
+		// 两条路都是非零，部署脚本的 pipefail 都能抓住。
+		if _, err := os.Stdout.Write(raw); err != nil {
+			fmt.Fprintf(os.Stderr, "materialize: write stdout: %v\n", err)
+			return 1
+		}
+		fmt.Fprintf(os.Stderr, "materialize: ok（%d 把 key 已解析，明文经 stdout 输出）\n", rep.Resolved)
+		return 0
+	}
+	if err := os.WriteFile(out, raw, 0o600); err != nil {
+		fmt.Fprintf(os.Stderr, "materialize: write %s: %v\n", out, err)
+		return 1
+	}
+	fmt.Fprintf(os.Stderr, "materialize: ok（%d 把 key 已解析 → %s，0600；含明文，用完即删，严禁入 git）\n", rep.Resolved, out)
+	return 0
+}
+
 // buildAuthStore 启动时组装校验面（T-024 优先级：tokens.json > config.auth_token > 不鉴权）。
 //
 // 返回 nil = 未配置鉴权，行为与 T-024 之前完全一致（不挂中间件、零开销）。
 // 单 token 兼容模式只在 auth_token **已成功解析**时启用——解析失败还拿占位符
 // 去校验的话，合法客户端全 401 而现象指向"客户端配错了"，那是最坏的排查体验；
 // 此时宁可退回不鉴权 + ResolveKeys 已打过的 WARN（失败必须响，响过之后不再叠坑）。
-func buildAuthStore(tokensFile string, cfg *config.Config) *auth.Store {
-	store, err := auth.LoadStore(tokensFile, auth.WithLogger(log.Printf))
+//
+// required=true（-tokens-file 显式给出，容器形态恒真）时文件缺失 → 启动即炸（T-026 fail-closed）：
+// "显式声明了鉴权名单却找不到名单"与"从没配置过鉴权"是两种世界，前者静默放行
+// 就是裸奔网关（评审 S3）。挂载错位必须在第一秒暴露，不是在全绿里潜伏。
+func buildAuthStore(tokensFile string, required bool, cfg *config.Config) *auth.Store {
+	store, err := auth.LoadStore(tokensFile,
+		auth.WithLogger(log.Printf),
+		auth.WithTouchDisabled(os.Getenv("MORETOKEN_AUTH_TOUCH") == "off"))
 	if err != nil {
 		log.Fatalf("load tokens %s: %v", tokensFile, err) // 声明了却坏了 → 启动即炸，不静默
+	}
+	if required && !store.HasEntries() {
+		if _, statErr := os.Stat(tokensFile); statErr != nil {
+			log.Fatalf("auth: -tokens-file 显式指定为 %s 但文件不可读（%v）——fail-closed 拒绝裸奔启动。"+
+				"检查挂载/路径；确认要关闭鉴权则移除 -tokens-file 参数", tokensFile, statErr)
+		}
 	}
 	if store.HasEntries() {
 		return store
@@ -332,6 +412,15 @@ func runDoctorClient(url string) int {
 	if resp.StatusCode == http.StatusServiceUnavailable || out.Status == "escalate" {
 		log.Printf("doctor: **自愈失效** —— %s", out.Reason)
 		return 1
+	}
+	// 非 200/503 的一切响应（典型：T-024 之后的 401——/doctor 受鉴权保护而探针没带 token）
+	// 都归"不可达/配置错"档（exit 2），**绝不回落 ok**。
+	// 401 的 body 不是 doctor JSON，旧代码会解出空 Status → 走到底下的 ok 分支 → 假绿；
+	// 而假绿比空白更贵（T-016 铁律）：它让"升级判据已失效"看起来像"一切健康"。
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("doctor: 网关回了 HTTP %d（不是判据响应）——常见原因：/doctor 受 token 鉴权保护而探针未带 token，"+
+			"或网关换成了别的进程。判据**未生效**，按不可达处理", resp.StatusCode)
+		return 2
 	}
 	log.Printf("doctor: ok（连续失败在承诺窗口内或此刻无失败，指标 %s）", strings.TrimSpace(string(body)))
 	return 0

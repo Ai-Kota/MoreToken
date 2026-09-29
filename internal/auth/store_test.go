@@ -435,6 +435,23 @@ func TestTouchAsync_FailureNeverPanics(t *testing.T) {
 	s.TouchAsync("") // 空 name 直接忽略
 }
 
+// TestTouchAsync_Disabled touchDisabled=true → 不回写（T-026 容器 ro 挂载形态）。
+// 决定性断言：请求后文件里 last_used 仍为 null，且不因 EROFS 报错/panic。
+func TestTouchAsync_Disabled(t *testing.T) {
+	path := storePath(t)
+	mustIssue(t, path, "notouch", "", 0, nil, time.Now())
+	s, _ := LoadStore(path, WithTouchDisabled(true))
+	s.TouchAsync("notouch")
+	time.Sleep(150 * time.Millisecond) // 给"若会写"留足时间
+	entries, err := List(path)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("List: %v %v", entries, err)
+	}
+	if entries[0].LastUsed != nil {
+		t.Fatal("touchDisabled 下 last_used 不应被回写")
+	}
+}
+
 // TestTouchAsync_InMemoryNoop InMemoryStore（无 path）Touch 是 no-op。
 func TestTouchAsync_InMemoryNoop(t *testing.T) {
 	s := InMemoryStore(nil)

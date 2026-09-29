@@ -1,0 +1,6 @@
+# 行尾规约（T-026）。
+# shell 脚本强制 LF：docker/entrypoint.sh 在 alpine /bin/sh 里跑，CRLF 会在 `\r` 上炸；
+# 宿主侧 mt-deploy.sh/mt-verify.sh 虽经 Git Bash 容忍 CRLF，统一 LF 更省心。
+# Dockerfile 另有构建期 sed 去 CR 兜底，双保险。
+*.sh text eol=lf
+entrypoint.sh text eol=lf

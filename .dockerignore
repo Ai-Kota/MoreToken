@@ -1,0 +1,18 @@
+# Docker 构建上下文排除（T-026）。目的：镜像层里不出现凭据指针、git 历史、宿主二进制。
+# 注意：build context 是仓库根（compose 的 context: ..），故本文件在仓根。
+
+.git
+.gitignore
+.gitattributes
+.claude
+bin/
+config/
+docker/runtime/
+docs/
+scripts/
+*.exe
+*.bak-*
+*.log
+.local/
+Dockerfile
+docker/Dockerfile

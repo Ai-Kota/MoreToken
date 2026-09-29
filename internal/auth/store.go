@@ -59,8 +59,14 @@ type Store struct {
 	now  func() time.Time        // 时钟注入（测试给 fake clock）
 	logf func(string, ...any)    // 热加载失败/回写失败的留痕出口
 
-	touchMu     sync.Mutex
-	lastTouch   map[string]time.Time // last_used 落盘节流：每 name 至多 60s 一次
+	// touchDisabled=true → TouchAsync 是 no-op（T-026 容器形态）。
+	// 容器把 tokens 目录挂成 ro 且宿主 CLI 是唯一写者；容器再回写 last_used
+	// 会 EROFS 每 60s/token 刷 WARN 污染日志，且与宿主写者构成"吊销复活"竞态
+	// （评审 S2）。关掉它：last_used 审计改由 NATS status 的内存态承担。
+	touchDisabled bool
+
+	touchMu       sync.Mutex
+	lastTouch     map[string]time.Time // last_used 落盘节流：每 name 至多 60s 一次
 	touchInflight map[string]bool
 }
 
@@ -75,6 +81,12 @@ func WithClock(now func() time.Time) StoreOption {
 // WithLogger 注入日志出口（默认丢弃——校验面不因日志缺失而报错）。
 func WithLogger(logf func(string, ...any)) StoreOption {
 	return func(s *Store) { s.logf = logf }
+}
+
+// WithTouchDisabled 关闭 last_used 回写（T-026 容器形态：ro 挂载 + 宿主单写者）。
+// 见 Store.touchDisabled 字段注释——关掉它同时消灭 EROFS 刷屏与双写者竞态。
+func WithTouchDisabled(disabled bool) StoreOption {
+	return func(s *Store) { s.touchDisabled = disabled }
 }
 
 // DefaultTTL -token-gen 不指定 ttl 时的默认过期时长（30 天）。
@@ -229,7 +241,7 @@ func (s *Store) Verify(plain string) (string, bool) {
 // 只更新 last_used 字段，不整页覆盖别人的改动）。
 // 任何失败只记日志，**永不影响请求**。
 func (s *Store) TouchAsync(name string) {
-	if s.path == "" || name == "" {
+	if s.path == "" || name == "" || s.touchDisabled {
 		return
 	}
 	s.touchMu.Lock()

@@ -10,3 +10,10 @@ scripts/bin/
 .claude/read_tracker.json
 .claude/context-snapshot.md
 .claude/metrics/
+
+# Token 注册表 = 运行态，不入库（T-026）。里面只有 SHA-256 哈希+vault 指针（本身 git-safe），
+# 但它是**本机运行状态**而非源码：① mt-verify 会往里发一次性 verify-probe 条目（污染）
+# ② 原子写的 .tokens-*.tmp 残留 ③ 真相源是 vault（moretoken/tokens/*），注册表可由重发 token 重建。
+# 单机部署，注册表随本机磁盘/备份存续；新机重新 mt-deploy + token-gen 即可。
+docker/runtime/
+config/tokens.json

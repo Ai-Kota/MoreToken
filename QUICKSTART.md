@@ -243,6 +243,45 @@ Notes:
 
 ---
 
+## 8. Production Deployment (Docker, auto-start on boot)
+
+Run the gateway as a self-healing container that comes up on boot — no manual
+start. Design: **vault resolution stays on the host, runtime goes into the
+container** (the Linux container can't exec the Windows `vault.exe`, so the host
+resolves the 90 `vault:` pointers into a complete config and pipes it into a
+Docker named volume; the container only consumes it).
+
+```bash
+# One command: resolve vault → ship to named volume → build → up → verify (15 assertions)
+bash docker/mt-deploy.sh
+
+# Re-run the verification matrix anytime (no redeploy)
+bash docker/mt-verify.sh
+```
+
+What `mt-deploy.sh` guarantees:
+- **Plaintext keys never land on the Windows filesystem** — they flow host process memory → pipe → Docker named volume (inside the Docker VM). The repo/git only ever sees `vault:` pointers and SHA-256 hashes.
+- **Deploy gate** — any unresolved key aborts (`-materialize-config` refuses to emit a half config); supply-coverage `-check` runs first.
+- **Fail-closed auth** — the container's `-tokens-file` is explicit, so a missing/mis-mounted tokens.json crashes loudly instead of silently running open.
+
+Boot chain (zero manual steps): **login → Docker Desktop (AutoStart) → `restart: always` pulls the container → config already in the volume (no vault needed) → cc-ft works.**
+
+Ops:
+```bash
+docker logs -f moretoken          # logs
+docker restart moretoken          # manual restart
+bash docker/mt-deploy.sh          # redeploy after upstream key rotation (re-materializes)
+```
+
+See `docker/README.md` for the full runbook — token lifecycle, metabolism
+(harvest), the three boot-chain exceptions, and troubleshooting.
+
+> Note: `restart: always` recovers from **process crash** and **boot/daemon
+> restart**, but NOT from a manual `docker stop`/`docker kill` (Docker respects
+> manual stops until the daemon restarts). That's by design, not a defect.
+
+---
+
 ## Common Scenarios
 
 ### Using environment variables for keys

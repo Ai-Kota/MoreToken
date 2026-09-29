@@ -99,6 +99,26 @@
 - **I14 吊销即时**：revoke/rotate 落盘后，运行中网关的下一条请求即按新名单校验（无需重启）
 - **I15 明文零落盘**：tokens.json 任何字段不含明文、不含可反推材料（只有 sha256 哈希 + 8 字符前缀 + 指针）；vault 模式明文不回显终端；明文不进子进程 argv（走 stdin）
 
+### F10 Docker 化部署（T-026 新增）
+
+> 宿主解析 vault → 容器运行；开机零手动。完整设计与真身结果见 `docs/tasks/T-026.md`。
+> 被测：`-materialize-config`（宿主）+ 容器编排（Dockerfile/compose/mt-deploy/mt-verify）。
+> 自动化载体：`docker/mt-verify.sh`（15 断言，可重跑）；materialize 单测在 main_test.go。
+
+| 正常 | 空 | 错误 | 边界 | 时序 |
+|------|----|------|------|------|
+| materialize 解析全部 env:/vault: 指针 → 完整 config（round-trip Load 等价、无指针残留、stdout 纯净）；容器经命名卷消费它，鉴权/路由/NATS 全绿（**I16**） | 无外部依赖也能起：materialize 输出物自包含，容器运行路径零 vault（**I17**） | 任一 key 解析失败 → materialize exit 1 **拒绝输出半成品**（残缺 config 不上船）；config 路径错 → exit 1 | 明文 key 只经管道进命名卷，**不落 Windows 文件系统**、不进 git（仓库只有 vault: 指针 + sha256 哈希）（**I18**） | — |
+| 显式 `-tokens-file` 缺失 → 启动 fatal（fail-closed），entrypoint 双文件缺失红字退出 | — | 挂载错位 → 响亮 crash loop，**不静默裸奔**（**I19**） | tokens 走**目录** ro 挂载：宿主 revoke 经 rename 传播，容器 mtime 热加载 | 吊销后 **<5s** 容器侧 401（单文件挂载会 inode 钉死永久失效——评审 S1 的反面断言）（**I20**） |
+| 进程自然退出（崩溃）→ `restart:always` 自动拉起（RestartCount +1） | — | — | read_only rootfs + uid 10001 + no-new-privileges；nats CLI pin sha256（供应链闸） | 开机链：登录 → Docker Desktop AutoStart → daemon 应用 always 策略拉起容器（**I21**，#12 机器重启人工验） |
+
+**不变量**：
+- **I16 解析在宿主、运行在容器**：容器镜像无 vault.exe 也不需要；materialize 复用已测试的 ResolveKeys（不在 shell 重造）
+- **I17 容器运行路径零 vault 依赖**：materialize 输出自包含，容器重启/拉起不需宿主 vault 在场
+- **I18 明文不落 Windows 文件系统**：key 明文只在 moretoken.exe 内存 → 管道 → 命名卷（Docker VM vhdx）；仓库/git 只有指针与哈希（诚实边界：卷物理落 Docker 数据盘，at-rest 靠 BitLocker，见 T-026 安全姿态）
+- **I19 fail-closed 不裸奔**：显式 tokens-file 缺失/挂载错位 → 响亮失败，绝不静默降级成无鉴权全绿网关（评审 S3）
+- **I20 吊销经目录挂载 <5s 生效**：单文件挂载会因 rename 换 inode 被容器钉死 → 吊销永久失效且静默（评审 S1）；目录挂载 + mtime 热加载修正
+- **I21 开机零手动**：restart:always + Docker Desktop AutoStart；手动 docker kill/stop 不立即自愈是 Docker 既定语义（daemon 重启才应用 always），非缺陷
+
 ## 3. 契约 fixtures（真实捕获）
 
 > 真实上游样本固化，测试从契约生成，不从写的代码推断。

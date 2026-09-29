@@ -1,0 +1,63 @@
+# MoreToken 容器编排（T-026）。对齐 freellm 参照系的稳定形态，安全卫生高于它。
+#
+# 启动前提：先跑 mt-deploy.sh —— 它创建命名卷 moretoken_moretoken-run 并把
+# **宿主解析好的完整 config**（含明文 key）投递进去。本文件不解析 vault、不碰密钥。
+#
+# 关键取舍见 docs/tasks/T-026.md：
+#   - restart: always（不是 unless-stopped）——一次 `compose stop` 不应让网关跨重启静默失踪
+#   - tokens 走**目录** ro 挂载（不是单文件）——宿主 revoke 用 tmp+rename 换 inode，
+#     单文件挂载会钉死旧 inode 导致吊销永久失效（评审 S1）
+#   - MORETOKEN_AUTH_TOUCH=off——容器不回写 last_used（ro 挂载 + 宿主单写者，灭双写竞态 S2）
+#   - 端口只绑 127.0.0.1——不暴露 LAN（T-024 鉴权是纵深防御，不是暴露许可）
+
+name: moretoken
+
+services:
+  moretoken:
+    container_name: moretoken
+    build:
+      context: ..                    # 仓库根（Dockerfile 的 COPY . . 需要 main.go/internal/go.mod）
+      dockerfile: docker/Dockerfile
+    image: moretoken:latest
+    restart: always
+    read_only: true                  # rootfs 只读；唯一可写点是下面的 tmpfs /tmp
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp                         # nats CLI 的 HOME + 任何临时文件
+    ports:
+      - "127.0.0.1:8462:8462"        # 只绑回环：cc-ft 走 127.0.0.1，不开 LAN
+    volumes:
+      # 已解析 config（明文 key）——命名卷，物理在 Docker VM 内，不进仓库/不进 git。
+      # external：由 mt-deploy.sh 预建并投递；compose 不负责创建（创建时机在解析之后）。
+      - moretoken-run:/run/moretoken
+      # tokens.json（仅哈希+指针）——**目录** ro 挂载，宿主 CLI 是唯一写者。
+      - ./runtime:/run/mt-tokens:ro
+      # NATS 客户端凭据——ro。缺了它发布器静默降级 no-op（路由主链路不受影响）。
+      - C:/Users/aimly/.local/share/nats/nsc/keys/creds/AImlyCloud/AImlyCloud/bridge.creds:/run/secrets/nats/bridge.creds:ro
+    environment:
+      # NATS 发布（T-005/T-014）：容器内用 linux nats CLI（镜像已 pin sha256 装入 /usr/local/bin）。
+      NATS_SERVERS: "nats://www.aimly.top:14222"
+      NATS_USER_CREDS: "/run/secrets/nats/bridge.creds"   # 容器内路径，非宿主路径
+      NATS_CA_FILE: "system"                              # 走镜像里的 ca-certificates
+      NATS_BIN: "/usr/local/bin/nats"                     # 覆盖 Windows 默认路径（publish.go:75）
+      # 容器形态禁 last_used 回写：ro 挂载下回写必 EROFS 刷 WARN，且与宿主写者构成吊销复活竞态。
+      MORETOKEN_AUTH_TOUCH: "off"
+      TZ: "Asia/Shanghai"
+    # /health 是 T-024 鉴权豁免端点，healthcheck 无需 token。
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8462/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  moretoken-run:
+    external: true
+    name: moretoken_moretoken-run    # 与 mt-deploy.sh 里 `docker volume create` 的字面名一致
