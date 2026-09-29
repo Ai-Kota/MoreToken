@@ -9,10 +9,10 @@
 
 | 字段 | 值 |
 |------|------|
-| **会话日期** | 2026-09-29 14:11:10 |
-| **执行任务** | T-028 |
+| **会话日期** | 2026-09-29 14:51:58 |
+| **执行任务** | T-029 |
 | **完成状态** | ✅ 进行中 |
-| **会话摘要** | 代谢自动化完成：mt-deploy 变更检测（SAME 零停机 / CHANGED restart+healthy+全量矩阵）；计划任务 MoreToken-DailyRedeploy 每日 12:37（裸 bash 载体，flashcheck 自动包 hidden-run.vbs）；logged.sh 调度器环境加固。实测修两处 exit1：动作内嵌引号被包装搞坏、dirname 不认反斜杠。手动触发三次全 exit0、容器零停机 |
+| **会话摘要** | Docker 通用化完成：双 compose（generic base 参数化 MT_PROJECT/CONTAINER/PORT/CONFIG + env_file .env.keys(required:false)；vault.yml 本机形态迁入）+ mt-up.sh/mt-token.sh（generic 零 vault 零 Go 工具链）+ mt-verify 参数化双通道 + .env.keys.example/gitignore + README 双路径重写 + QUICKSTART §8。真身矩阵 6/6：generic 旁路 :8477 keys 3 resolved、token 全链、生产 StartedAt 双场景纹丝不动、vault.yml SAME 零停机复验。实测修 MSYS 路径转换坑（cygpath -m + MSYS_NO_PATHCONV）。test-all 绿（零 Go 改动证明） |
 
 ---
 
@@ -24,16 +24,19 @@
 
 | 任务ID | 进度 | 停在哪里 | 下一步 |
 |:------:|:----:|---------|--------|
-| T-028 | 🔄 | 上次会话中断 | 继续执行 |
+| T-029 | 🔄 | 上次会话中断 | 继续执行 |
 
 ### 未完成的修改
 
 | 文件 | 修改内容 | 是否已提交 |
 |------|---------|:---------:|
-| .dockerignore | （待确认） | ⬜ |
+| .gitignore | （待确认） | ⬜ |
+| QUICKSTART.md | （待确认） | ⬜ |
 | config/models.auto.json | （待确认） | ⬜ |
 | docker/README.md | （待确认） | ⬜ |
+| docker/docker-compose.yml | （待确认） | ⬜ |
 | docker/mt-deploy.sh | （待确认） | ⬜ |
+| docker/mt-verify.sh | （待确认） | ⬜ |
 | docs/tasks/TASKS.md | （待确认） | ⬜ |
 
 ### 待决策项
@@ -58,7 +61,7 @@
 
 ### 项目当前状态
 
-代谢自动化完成：mt-deploy 变更检测（SAME 零停机 / CHANGED restart+healthy+全量矩阵）；计划任务 MoreToken-DailyRedeploy 每日 12:37（裸 bash 载体，flashcheck 自动包 hidden-run.vbs）；logged.sh 调度器环境加固。实测修两处 exit1：动作内嵌引号被包装搞坏、dirname 不认反斜杠。手动触发三次全 exit0、容器零停机
+Docker 通用化完成：双 compose（generic base 参数化 MT_PROJECT/CONTAINER/PORT/CONFIG + env_file .env.keys(required:false)；vault.yml 本机形态迁入）+ mt-up.sh/mt-token.sh（generic 零 vault 零 Go 工具链）+ mt-verify 参数化双通道 + .env.keys.example/gitignore + README 双路径重写 + QUICKSTART §8。真身矩阵 6/6：generic 旁路 :8477 keys 3 resolved、token 全链、生产 StartedAt 双场景纹丝不动、vault.yml SAME 零停机复验。实测修 MSYS 路径转换坑（cygpath -m + MSYS_NO_PATHCONV）。test-all 绿（零 Go 改动证明）
 
 ### 关键约定
 
@@ -74,4 +77,4 @@
 
 | 日期 | 任务 | 成果 | 问题 |
 |------|------|------|------|
-| 2026-09-29 | T-028 | 代谢自动化完成：mt-... | |
+| 2026-09-29 | T-029 | Docker 通用化完成：�... | |

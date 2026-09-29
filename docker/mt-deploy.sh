@@ -75,7 +75,8 @@ WAS_RUNNING=0
 docker ps --format '{{.Names}}' | grep -qx moretoken && WAS_RUNNING=1
 BEFORE_START="$(docker inspect -f '{{.State.StartedAt}}' moretoken 2>/dev/null || echo none)"
 say "⑥ 构建镜像并启动容器"
-docker compose -f "$HERE/docker-compose.yml" up -d --build || die "compose up 失败"
+# vault 形态专用 compose（T-029 起 docker-compose.yml 是 generic 形态，两文件不通用）。
+docker compose -f "$HERE/docker-compose.vault.yml" up -d --build || die "compose up 失败"
 
 # ---- ⑥b config 变了且容器是续跑的 → restart 才生效（config 只在启动时 Load）----
 if [ "$MARKER" = "CHANGED" ] && [ "$WAS_RUNNING" = 1 ]; then

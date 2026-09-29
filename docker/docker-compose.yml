@@ -1,48 +1,53 @@
-# MoreToken 容器编排（T-026）。对齐 freellm 参照系的稳定形态，安全卫生高于它。
+# MoreToken 容器编排 —— **generic 形态**（对外默认，T-029）。
 #
-# 启动前提：先跑 mt-deploy.sh —— 它创建命名卷 moretoken_moretoken-run 并把
-# **宿主解析好的完整 config**（含明文 key）投递进去。本文件不解析 vault、不碰密钥。
+# 适用：密钥用 env:VAR 引用（推荐）或字面量写在 config 里的部署——**无 vault、
+# 无宿主 Go 工具链依赖**。key 经 `.env.keys`（gitignored）由 env_file 注入容器环境，
+# 容器启动时 ResolveKeys 自行解析 env: 指针（复用既有已测试代码路径，零新增机制）。
 #
-# 关键取舍见 docs/tasks/T-026.md：
-#   - restart: always（不是 unless-stopped）——一次 `compose stop` 不应让网关跨重启静默失踪
-#   - tokens 走**目录** ro 挂载（不是单文件）——宿主 revoke 用 tmp+rename 换 inode，
-#     单文件挂载会钉死旧 inode 导致吊销永久失效（评审 S1）
-#   - MORETOKEN_AUTH_TOUCH=off——容器不回写 last_used（ro 挂载 + 宿主单写者，灭双写竞态 S2）
-#   - 端口只绑 127.0.0.1——不暴露 LAN（T-024 鉴权是纵深防御，不是暴露许可）
+# 三步跑起来（详见 docker/README.md）：
+#   1. cp config/config.example.json config/config.json 并填入你的 base_url/模型/env:VAR 名
+#   2. cp docker/.env.keys.example docker/.env.keys 并填入真实 key
+#   3. bash docker/mt-up.sh
+#
+# vault 密码墙用户（密钥全在墙里、要求明文零落盘）：用 docker-compose.vault.yml + mt-deploy.sh。
+#
+# 参数化（多实例/旁路测试）：MT_CONTAINER / MT_PORT / MT_CONFIG 均可经环境变量覆盖。
 
 name: moretoken
 
 services:
   moretoken:
-    container_name: moretoken
+    container_name: ${MT_CONTAINER:-moretoken}
     build:
       context: ..                    # 仓库根（Dockerfile 的 COPY . . 需要 main.go/internal/go.mod）
       dockerfile: docker/Dockerfile
     image: moretoken:latest
     restart: always
-    read_only: true                  # rootfs 只读；唯一可写点是下面的 tmpfs /tmp
+    read_only: true                  # rootfs 只读；唯一可写点是 tmpfs /tmp
     security_opt:
       - no-new-privileges:true
     tmpfs:
-      - /tmp                         # nats CLI 的 HOME + 任何临时文件
+      - /tmp
     ports:
-      - "127.0.0.1:8462:8462"        # 只绑回环：cc-ft 走 127.0.0.1，不开 LAN
+      - "127.0.0.1:${MT_PORT:-8462}:8462"   # 只绑回环；要开 LAN 先读 README 安全节
     volumes:
-      # 已解析 config（明文 key）——命名卷，物理在 Docker VM 内，不进仓库/不进 git。
-      # external：由 mt-deploy.sh 预建并投递；compose 不负责创建（创建时机在解析之后）。
-      - moretoken-run:/run/moretoken
-      # tokens.json（仅哈希+指针）——**目录** ro 挂载，宿主 CLI 是唯一写者。
+      # config：单文件 ro bind。安全依据：config **只在启动时读一次**、无热加载，
+      # 不存在 tokens.json 那种"运行中被 rename 重写"的 inode 钉死问题（T-026 评审 S1
+      # 只影响热加载文件）。文件里只有 env:VAR 指针/字面量——env: 形态下磁盘无明文。
+      - ${MT_CONFIG:-../config/config.json}:/run/moretoken/config.json:ro
+      # tokens.json（仅 SHA-256 哈希，无明文）——**目录** ro 挂载（吊销热加载要 rename 可见）。
+      # 发放/吊销经 mt-token.sh（one-shot 容器 rw 挂载同目录写入）。
       - ./runtime:/run/mt-tokens:ro
-      # NATS 客户端凭据——ro。缺了它发布器静默降级 no-op（路由主链路不受影响）。
-      - C:/Users/aimly/.local/share/nats/nsc/keys/creds/AImlyCloud/AImlyCloud/bridge.creds:/run/secrets/nats/bridge.creds:ro
+    env_file:
+      # 真实 key 放这里（EXAMPLE: MY_KEY=sk-xxx）。文件缺失不报错——
+      # 字面量 key 用户本来就不需要它；env: 用户缺了它启动日志会响亮 WARN unresolved。
+      - path: .env.keys
+        required: false
     environment:
-      # NATS 发布（T-005/T-014）：容器内用 linux nats CLI（镜像已 pin sha256 装入 /usr/local/bin）。
-      NATS_SERVERS: "nats://www.aimly.top:14222"
-      NATS_USER_CREDS: "/run/secrets/nats/bridge.creds"   # 容器内路径，非宿主路径
-      NATS_CA_FILE: "system"                              # 走镜像里的 ca-certificates
-      NATS_BIN: "/usr/local/bin/nats"                     # 覆盖 Windows 默认路径（publish.go:75）
-      # 容器形态禁 last_used 回写：ro 挂载下回写必 EROFS 刷 WARN，且与宿主写者构成吊销复活竞态。
-      MORETOKEN_AUTH_TOUCH: "off"
+      # NATS 可选（增强非依赖，缺失即 no-op）：有 NATS 服务器的取消注释并填值。
+      # 镜像已内置 linux nats CLI（/usr/local/bin/nats，pin sha256）。
+      # NATS_SERVERS: "nats://your.server:4222"
+      # NATS_CA_FILE: "system"
       TZ: "Asia/Shanghai"
     # /health 是 T-024 鉴权豁免端点，healthcheck 无需 token。
     healthcheck:
@@ -56,8 +61,3 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
-volumes:
-  moretoken-run:
-    external: true
-    name: moretoken_moretoken-run    # 与 mt-deploy.sh 里 `docker volume create` 的字面名一致

@@ -245,36 +245,36 @@ Notes:
 
 ## 8. Production Deployment (Docker, auto-start on boot)
 
-Run the gateway as a self-healing container that comes up on boot — no manual
-start. Design: **vault resolution stays on the host, runtime goes into the
-container** (the Linux container can't exec the Windows `vault.exe`, so the host
-resolves the 90 `vault:` pointers into a complete config and pipes it into a
-Docker named volume; the container only consumes it).
+Run the gateway as a self-healing container: `restart: always` + healthcheck +
+Docker Desktop autostart = **zero manual steps on boot**. Same binary, same
+behavior as local mode — the difference is all in the runtime envelope
+(self-healing, reproducibility, isolation). Two flavors, one image:
+
+**Generic (recommended default)** — keys via `env:VAR` + a gitignored `.env.keys`:
 
 ```bash
-# One command: resolve vault → ship to named volume → build → up → verify (15 assertions)
-bash docker/mt-deploy.sh
-
-# Re-run the verification matrix anytime (no redeploy)
-bash docker/mt-verify.sh
+cp config/config.example.json config/config.json   # edit: base_url/models/env:VAR names
+cp docker/.env.keys.example docker/.env.keys       # edit: real keys (chmod 600)
+bash docker/mt-up.sh                               # build + up + health check
+bash docker/mt-token.sh gen my-laptop              # issue a token (shown once)
 ```
 
-What `mt-deploy.sh` guarantees:
-- **Plaintext keys never land on the Windows filesystem** — they flow host process memory → pipe → Docker named volume (inside the Docker VM). The repo/git only ever sees `vault:` pointers and SHA-256 hashes.
-- **Deploy gate** — any unresolved key aborts (`-materialize-config` refuses to emit a half config); supply-coverage `-check` runs first.
-- **Fail-closed auth** — the container's `-tokens-file` is explicit, so a missing/mis-mounted tokens.json crashes loudly instead of silently running open.
+**Vault flavor** (keys live in a vault wall; host resolves, container never sees
+vault — plaintext keys flow memory → pipe → Docker named volume, never touching
+the host filesystem or git):
 
-Boot chain (zero manual steps): **login → Docker Desktop (AutoStart) → `restart: always` pulls the container → config already in the volume (no vault needed) → cc-ft works.**
-
-Ops:
 ```bash
-docker logs -f moretoken          # logs
-docker restart moretoken          # manual restart
-bash docker/mt-deploy.sh          # redeploy after upstream key rotation (re-materializes)
+bash docker/mt-deploy.sh    # -check gate → materialize → ship to volume → up → verify (15 assertions)
+bash docker/mt-verify.sh    # re-run the verification matrix anytime
 ```
 
-See `docker/README.md` for the full runbook — token lifecycle, metabolism
-(harvest), the three boot-chain exceptions, and troubleshooting.
+Both flavors: read-only rootfs, non-root uid, no-new-privileges, port bound to
+127.0.0.1 only, fail-closed auth (missing tokens.json crashes loudly instead of
+silently running open), token revocation hot-reloads in <5s.
+
+See **`docker/README.md`** for the full runbook — flavor comparison table,
+token lifecycle, multi-instance parameters, daily metabolism task (vault flavor),
+boot-chain exceptions, troubleshooting.
 
 > Note: `restart: always` recovers from **process crash** and **boot/daemon
 > restart**, but NOT from a manual `docker stop`/`docker kill` (Docker respects
