@@ -9,10 +9,10 @@
 
 | 字段 | 值 |
 |------|------|
-| **会话日期** | 2026-09-29 13:33:08 |
-| **执行任务** | T-027 |
+| **会话日期** | 2026-09-29 14:11:10 |
+| **执行任务** | T-028 |
 | **完成状态** | ✅ 进行中 |
-| **会话摘要** | 修复完成：删 Route 前早 flush（SSE 头保留预设）、首块 Write+Flush 才发 200、空流显式 WriteHeader。契约测试先红（wire 200 与诊断逐字一致）后绿；变异检验过（回贴早 flush 三用例复红）；test-all 全量绿。成功路径 wire 行为不变（④⑤旧代码即绿+修复后仍绿） |
+| **会话摘要** | 代谢自动化完成：mt-deploy 变更检测（SAME 零停机 / CHANGED restart+healthy+全量矩阵）；计划任务 MoreToken-DailyRedeploy 每日 12:37（裸 bash 载体，flashcheck 自动包 hidden-run.vbs）；logged.sh 调度器环境加固。实测修两处 exit1：动作内嵌引号被包装搞坏、dirname 不认反斜杠。手动触发三次全 exit0、容器零停机 |
 
 ---
 
@@ -24,15 +24,17 @@
 
 | 任务ID | 进度 | 停在哪里 | 下一步 |
 |:------:|:----:|---------|--------|
-| T-027 | 🔄 | 上次会话中断 | 继续执行 |
+| T-028 | 🔄 | 上次会话中断 | 继续执行 |
 
 ### 未完成的修改
 
 | 文件 | 修改内容 | 是否已提交 |
 |------|---------|:---------:|
+| .dockerignore | （待确认） | ⬜ |
 | config/models.auto.json | （待确认） | ⬜ |
+| docker/README.md | （待确认） | ⬜ |
+| docker/mt-deploy.sh | （待确认） | ⬜ |
 | docs/tasks/TASKS.md | （待确认） | ⬜ |
-| internal/proxy/proxy.go | （待确认） | ⬜ |
 
 ### 待决策项
 
@@ -56,7 +58,7 @@
 
 ### 项目当前状态
 
-修复完成：删 Route 前早 flush（SSE 头保留预设）、首块 Write+Flush 才发 200、空流显式 WriteHeader。契约测试先红（wire 200 与诊断逐字一致）后绿；变异检验过（回贴早 flush 三用例复红）；test-all 全量绿。成功路径 wire 行为不变（④⑤旧代码即绿+修复后仍绿）
+代谢自动化完成：mt-deploy 变更检测（SAME 零停机 / CHANGED restart+healthy+全量矩阵）；计划任务 MoreToken-DailyRedeploy 每日 12:37（裸 bash 载体，flashcheck 自动包 hidden-run.vbs）；logged.sh 调度器环境加固。实测修两处 exit1：动作内嵌引号被包装搞坏、dirname 不认反斜杠。手动触发三次全 exit0、容器零停机
 
 ### 关键约定
 
@@ -72,4 +74,4 @@
 
 | 日期 | 任务 | 成果 | 问题 |
 |------|------|------|------|
-| 2026-09-29 | T-027 | 修复完成：删 Route �... | |
+| 2026-09-29 | T-028 | 代谢自动化完成：mt-... | |

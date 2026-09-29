@@ -65,15 +65,45 @@ vault env ANTHROPIC_AUTH_TOKEN=moretoken/tokens/laptop-cc -- claude   # cc-ft �
 
 ---
 
-## 新陈代谢（models.auto.json 纳新）
+## 新陈代谢（models.auto.json 纳新）——每日自动，T-028
 
-harvest 仍在**宿主**跑（需 vault 解析上游 key 去实测）：dev-fleet 的 `freetier-harvest` 已改指 moretoken 宿主二进制（见 T-026 消解节），或手动：
+链路：dev-fleet `freetier-harvest`（已改指 moretoken 宿主二进制）每日实测纳新写
+`config/models.auto.json` → **计划任务 `MoreToken-DailyRedeploy`（每日 12:37）**跑
+`mt-deploy-logged.sh` → re-materialize 并进卷内 config → **变更检测**决定动不动容器：
+
+- `SAME`（多数日子，harvest 自节流 20h）→ 只轻量健康检查，**容器全程不动、零停机**
+- `CHANGED`（纳新/换 key/改配置）→ 原子换入 + `docker restart` + 等 healthy + 全量验证矩阵
+
+上游 **key 轮换同样被捕获**（materialize 输出逐字节比对）→ 每日任务顺带是 key 变更的
+自动收敛点（最迟 24h 生效）。
+
+```bash
+# 日志（自带 1MB 截断）
+tail -30 docker/runtime/deploy.log
+
+# 手动触发一次（等价于到点执行）
+schtasks /run /tn MoreToken-DailyRedeploy
+
+# 停用 / 恢复每日任务
+schtasks /change /tn MoreToken-DailyRedeploy /disable
+schtasks /change /tn MoreToken-DailyRedeploy /enable
+
+# 停用整个任务（删除）
+schtasks /delete /tn MoreToken-DailyRedeploy /f
+```
+
+注：任务动作是裸 `bash.exe <脚本绝对路径>`（**路径无空格故无引号**——dev-fleet
+flashcheck 会自动包一层 hidden-run.vbs 隐藏窗口，动作里带内嵌引号会被包装搞坏，
+2026-09-29 实测两次 exit 1 的教训）。若 dev-fleet 退役后包装消失，任务照跑，
+只是 12:37 会闪一次控制台窗口；介意的话把动作换成
+`wscript.exe //B //NoLogo E:\AImlyForge\tools\agent\moretoken\docker\run-mt-deploy-hidden.vbs`
+（自带隐藏宿主的备用载体，已实测可用）。
+
+容器内不做 harvest（避免挂 docker socket 或自重启的复杂度）。手动 harvest：
 
 ```bash
 bin/mt-host.exe -harvest -config config/config.json
 ```
-
-产物 `config/models.auto.json` 在宿主。**下次 `mt-deploy.sh` 时并进卷内 config**（materialize 走 `config.Load` 自动合并）→ `compose up` 生效。容器内不做 harvest（避免挂 docker socket 或自重启的复杂度）。
 
 ---
 

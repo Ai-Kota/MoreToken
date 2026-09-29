@@ -35,6 +35,7 @@
 | T-025 | cc-ft 启动路接入网关 token（T-024 部署收口） | ✅ | **已完成**（提交 `20f348a`）。T-024 启用鉴权后，cc-ft（T-012 建的唯一走网关的 Claude Code 启动路）仍带占位 token → 启用即锁死用户自己的启动路。改法：cc-ft profile settings.json 删占位 `ANTHROPIC_AUTH_TOKEN`（settings env 会覆盖进程环境，留着会顶掉真 token）+ PowerShell cc-ft 函数启动时 `vault get moretoken/tokens/laptop-cc` 注入 `$env:ANTHROPIC_AUTH_TOKEN`（明文只在墙与进程环境，配置文件零明文）。两文件均先备份 .bak-t024。不动 permissions/hooks（非放宽约束） |
 | T-026 | Docker 化部署（宿主解析 vault → 容器运行；开机零手动） | 🔵 | **开工中**。用户定性：dev-fleet 鸡肋随时废弃、freellm 8 容器稳定性是黄金标准。核心矛盾：90 把 key 是 vault: 指针需 Windows vault.exe 解析。骨架：解析留宿主（新增 -materialize-config 经管道直投命名卷，明文不落 Windows 磁盘）、运行进容器（alpine 非 root + read_only + restart:always + healthcheck）；T-024 校验面零 vault 依赖使鉴权容器内原生可用；tokens.json 目录 ro 挂载 + 宿主单写者 + 禁容器回写（消灭评审发现的"单文件挂载吊销永久失效"与"双写者吊销复活"两个静默洞）；dev-fleet 冲突条目停用。对抗评审吸收 3 个阻断级缺陷，详见 docs/tasks/T-026.md |
 | T-027 | 修流式请求错误路径（首块前不发 200，状态码回归真实） | ✅ | **已完成**。T-026 部署体检发现：容器日志 10 分钟 3 次 `superfluous WriteHeader`（用户真实 cc-ft 会话触发）。机制：streaming 在 Route 前就 flush SSE 头（200 上线），此后 404/400超限/503 的 http.Error 状态码**到不了客户端**——T-023 的 /compact、/model 提示在流式路径（Claude Code 100% 流式）全部失效，客户端收破碎流。T-003/T-010 老伤，容器日志首次让它现形。修法：首 flush 推迟到第一个数据块（已核实 ferr≠nil ⟹ 零块已发，边界干净）；流中断静默收尾刻意不做（另立任务，不同时改两处）。契约优先：测试先红后绿 + 变异检验 |
+| T-028 | 代谢自动化——mt-deploy 变更检测 + 每日计划任务 | ✅ | **已完成**。T-026 体检 A2 断层实证：harvest 更新宿主清单（12:44，42→54 模型）而容器卷内 config 是部署快照——新模型进不了运行中容器，T-027 重部署只即时闭合一次。修法（用户批准方案 a）：one-shot 投递改 cmp 变更检测（SAME 不动容器零停机 / CHANGED 才 restart+等 healthy）+ 每日 12:37 计划任务经 wscript 隐藏宿主跑 mt-deploy（防闪窗纪律）。key 轮换同被捕获 → 每日任务顺带成收敛点 |
 
 ## 存量登记说明
 

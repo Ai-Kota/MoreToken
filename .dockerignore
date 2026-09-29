@@ -7,7 +7,6 @@
 .claude
 bin/
 config/
-docker/runtime/
 docs/
 scripts/
 *.exe
@@ -15,4 +14,9 @@ scripts/
 *.log
 .local/
 Dockerfile
-docker/Dockerfile
+
+# docker/ 整体排除、只留 entrypoint.sh（T-028）：部署脚本/验证器/runbook 的改动
+# **不得**触发镜像重建——否则每日定时任务里改一行脚本就把容器 recreate 一次
+# （实测踩过：COPY . . 把 docker/*.sh 卷进构建层，脚本一变镜像就变）。
+docker/*
+!docker/entrypoint.sh
