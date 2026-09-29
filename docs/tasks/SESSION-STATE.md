@@ -9,10 +9,10 @@
 
 | 字段 | 值 |
 |------|------|
-| **会话日期** | 2026-09-29 14:51:58 |
-| **执行任务** | T-029 |
-| **完成状态** | ✅ 进行中 |
-| **会话摘要** | Docker 通用化完成：双 compose（generic base 参数化 MT_PROJECT/CONTAINER/PORT/CONFIG + env_file .env.keys(required:false)；vault.yml 本机形态迁入）+ mt-up.sh/mt-token.sh（generic 零 vault 零 Go 工具链）+ mt-verify 参数化双通道 + .env.keys.example/gitignore + README 双路径重写 + QUICKSTART §8。真身矩阵 6/6：generic 旁路 :8477 keys 3 resolved、token 全链、生产 StartedAt 双场景纹丝不动、vault.yml SAME 零停机复验。实测修 MSYS 路径转换坑（cygpath -m + MSYS_NO_PATHCONV）。test-all 绿（零 Go 改动证明） |
+| **会话日期** | 2026-09-29 15:05:50 |
+| **执行任务** | T-030 |
+| **完成状态** | 🔄 进行中 |
+| **会话摘要** | 带外证据链布设完成（重启前入库）：boot-verify.sh（记 LastBootUpTime 基准+轮询 daemon/容器+端点三连+vault-token 全链+freellm 旁证，FAIL 附恢复命令）+ Startup vbs 隐藏宿主（wscript 实测触发 log 10→20 行全 PASS）。基线跑全 PASS。**下个会话第一件事：读 docker/runtime/boot-verify.log 里 BOOT=新时刻（今天 15:0x 之后）的段落核销 #12a/b/c，然后 dev-fleet monitor 新配置生效验证（/doctor 401 噪音应消失），T-030 收尾提交** |
 
 ---
 
@@ -24,19 +24,13 @@
 
 | 任务ID | 进度 | 停在哪里 | 下一步 |
 |:------:|:----:|---------|--------|
-| T-029 | 🔄 | 上次会话中断 | 继续执行 |
+| T-030 | 🔄 | 上次会话中断 | 继续执行 |
 
 ### 未完成的修改
 
 | 文件 | 修改内容 | 是否已提交 |
 |------|---------|:---------:|
-| .gitignore | （待确认） | ⬜ |
-| QUICKSTART.md | （待确认） | ⬜ |
 | config/models.auto.json | （待确认） | ⬜ |
-| docker/README.md | （待确认） | ⬜ |
-| docker/docker-compose.yml | （待确认） | ⬜ |
-| docker/mt-deploy.sh | （待确认） | ⬜ |
-| docker/mt-verify.sh | （待确认） | ⬜ |
 | docs/tasks/TASKS.md | （待确认） | ⬜ |
 
 ### 待决策项
@@ -61,7 +55,7 @@
 
 ### 项目当前状态
 
-Docker 通用化完成：双 compose（generic base 参数化 MT_PROJECT/CONTAINER/PORT/CONFIG + env_file .env.keys(required:false)；vault.yml 本机形态迁入）+ mt-up.sh/mt-token.sh（generic 零 vault 零 Go 工具链）+ mt-verify 参数化双通道 + .env.keys.example/gitignore + README 双路径重写 + QUICKSTART §8。真身矩阵 6/6：generic 旁路 :8477 keys 3 resolved、token 全链、生产 StartedAt 双场景纹丝不动、vault.yml SAME 零停机复验。实测修 MSYS 路径转换坑（cygpath -m + MSYS_NO_PATHCONV）。test-all 绿（零 Go 改动证明）
+带外证据链布设完成（重启前入库）：boot-verify.sh（记 LastBootUpTime 基准+轮询 daemon/容器+端点三连+vault-token 全链+freellm 旁证，FAIL 附恢复命令）+ Startup vbs 隐藏宿主（wscript 实测触发 log 10→20 行全 PASS）。基线跑全 PASS。**下个会话第一件事：读 docker/runtime/boot-verify.log 里 BOOT=新时刻（今天 15:0x 之后）的段落核销 #12a/b/c，然后 dev-fleet monitor 新配置生效验证（/doctor 401 噪音应消失），T-030 收尾提交**
 
 ### 关键约定
 
@@ -77,4 +71,4 @@ Docker 通用化完成：双 compose（generic base 参数化 MT_PROJECT/CONTAIN
 
 | 日期 | 任务 | 成果 | 问题 |
 |------|------|------|------|
-| 2026-09-29 | T-029 | Docker 通用化完成：�... | |
+| 2026-09-29 | T-030 | 带外证据链布设完成... | |
