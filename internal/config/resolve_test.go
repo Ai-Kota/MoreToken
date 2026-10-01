@@ -25,7 +25,10 @@ func TestIsPlaceholder(t *testing.T) {
 		{"env", false},
 		{"vault", false},
 		{"", false},
-		{"sk-uP9TOcbXzHEtcaOAYXadGRIiMrUupmHo7KxEEShXOHxW0Y6N", false},
+		// ⚠️ 必须用**合成串**。此处原先填的是一把**真实**的 agnes key（2026-10-01 发现），
+		// 它随之进了 git 历史并被推到了 GitHub —— 真实凭据绝不可作为测试夹具。
+		// 本用例只想验证"非 env:/vault: 前缀 ⇒ 不是占位符"，随便一个合成串都等价。
+		{"sk-SYNTHETIC-TEST-VALUE-NOT-A-REAL-KEY-0000000000", false},
 		{"cpk-abc", false},
 		{"sk-xt-fdaa", false},
 	}
