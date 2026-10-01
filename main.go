@@ -21,14 +21,15 @@ import (
 	"syscall"
 	"time"
 
+	"moretoken/internal/admission"
 	"moretoken/internal/auth"
 	"moretoken/internal/catalog"
 	"moretoken/internal/config"
 	"moretoken/internal/metrics"
 	"moretoken/internal/nats"
 	"moretoken/internal/probe"
-	"moretoken/internal/proxy"
 	"moretoken/internal/provider"
+	"moretoken/internal/proxy"
 	"moretoken/internal/router"
 	"moretoken/internal/state"
 )
@@ -181,11 +182,55 @@ func main() {
 	})
 
 	// 注意这里**没有**层门控：兜底是每请求的，档位不参与路由（2026-09-20，见 router.go）。
-	rt = router.New(cfg,
+	//
+	// ⚠️ 路由只构造一次：选项**全部**并进 opts 再 New。曾经先 New 一次再 New 一次，
+	// 前一个实例被直接覆盖、注入的东西全丢 —— 这类"建了又盖"的写法必须并成一次。
+	rtOpts := []router.Option{
 		router.WithClient(provider.UpstreamClient()),
 		// 免费层真的被试过且全挂 → 记一次观测（留痕 + 上报），**不改变路由行为**。
 		router.WithFreeExhaustedSink(func() { st.AllFreeUnavailable(context.Background()) }),
-	)
+	}
+	// 实测能力准入选表（ADR-004 §四）：只对虚拟模型（auto:*）按维度过滤，
+	// 让 auto:coding 落到"实测编程通过"的模型上、而不是通用模型。
+	// 路径为空 ⇒ 完全不启用（行为与接入前一致）；文件缺失/坏 ⇒ 回退且状态**在日志与 /doctor 上可见**。
+	if cfg.AdmissionPath != "" {
+		adm := admission.Load(cfg.AdmissionPath)
+		if cfg.AdmissionMinRatio > 0 {
+			adm.SetMinRatio(cfg.AdmissionMinRatio)
+		}
+		// **入池**：把实测结论并进配置（新增模型 + 补齐 kinds）。
+		// 与运行时的准入过滤互补 —— filter 管删，这里管补（见 config.ApplyAdmission 注释）。
+		// ⚠️ 必须在 router.New 之前：router 持有的是 cfg 里已合并好的 providers。
+		mr := config.ApplyAdmission(cfg, adm.Rows(), adm.MinRatio())
+		if mr.Added > 0 || mr.Upgraded > 0 {
+			log.Printf("admission: 实测结论已并入配置 —— 新增模型 %d 个、补齐 kinds %d 处", mr.Added, mr.Upgraded)
+		}
+		// ⚠️ 必须有这一段：有实测证据、却没有 provider 能接住的模型**不会有任何报错**。
+		// 不报出来的话，`新增 0` 就无法区分"表里没有合格模型"与"全都没匹配上 base_url"——
+		// 排查会一头扎向配额，而真因是配置里没有那个上游。
+		if len(mr.Unmatched) > 0 {
+			log.Printf("admission: ⚠️ %d 个模型实测通过但**没有任何 provider 的 base_url 与之匹配**，"+
+				"进不了池（检查该上游是否已在 config 的 providers 里）：%v",
+				len(mr.Unmatched), mr.Unmatched)
+		}
+		rtOpts = append(rtOpts, router.WithAdmission(adm))
+		n, r, c, aerr := adm.Stats()
+		if adm.Empty() {
+			log.Printf("admission: 表不可用（%s）—— **不做准入过滤**，回退到 kinds；err=%s",
+				cfg.AdmissionPath, aerr)
+		} else {
+			// 准入线一并打出来：一个"为什么 4/5 也过了"的问题，必须能从日志/doctor 自答。
+			log.Printf("admission: 已加载 %d 个模型（reasoning 准入 %d / coding 准入 %d · 准入线 %.0f%%）",
+				n, r, c, adm.MinRatio()*100)
+		}
+		// 热加载：表更新后**无需重启容器**即可生效（准入表是分钟/小时级产物，
+		// 但重启容器对供给有中断代价 —— 不该让"重跑一次评估"必须赔上一次重启）。
+		// ⚠️ 此前 RefreshIfChanged 写了却没接线，等于热加载只存在于函数名里（2026-10-01 自查）。
+		admCtx, cancelAdm := context.WithCancel(context.Background())
+		defer cancelAdm()
+		go adm.Watch(admCtx, 30*time.Second)
+	}
+	rt = router.New(cfg, rtOpts...)
 	srv := proxy.NewServer(rt, cfg, declog).WithMetrics(mwin, escalateAfter)
 
 	// 入站鉴权（T-024）：tokens.json > config.auth_token > 不鉴权（nil = 零行为变化）。

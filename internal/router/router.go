@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"moretoken/internal/admission"
 	"net/http"
 	"strconv"
 	"strings"
@@ -40,6 +41,18 @@ type RouteRequest struct {
 	// 为 false（客户端给的是字面模型）时 Body 一个字节都不动——既有行为完全不变。
 	VirtualModel bool
 	WantKind     string // 虚拟模型要求的类型；"" = 任意类型
+
+	// Model 客户端请求的**字面**模型 id（VirtualModel=false 时由 proxy 填入；虚拟模型留空）。
+	//
+	// 为什么需要它（2026-10-01 血账）：Route 原先对字面模型是"首个候选说不认识就终止"
+	// （旧注释："换谁都是同一个答案"）。那个前提**只在"各 provider 的模型集合相同"时成立**。
+	// 本部署恰恰相反 —— agnes 与 xkiro 的模型集**不相交**（`qwen/*` 只有 xkiro 有），
+	// 而 agnes 排在候选首位 ⇒ 它永远先说"没有" ⇒ **xkiro 一次都轮不到**。
+	// 实测：`qwen/qwen3-max:free` 经网关一律 404，而直打 xkiro 上游是 200。
+	//
+	// 由 proxy 填入而不是在 router 里从 Body 解：Body 可达 0.7–1.7MB（见 ErrContextTooLong
+	// 注释），为取一个字段去解析它不值；而 proxy 本来就已经解析过 model 了。
+	Model string
 }
 
 // ErrContextTooLong 请求超出上游上下文上限——**确定性**失败，重试毫无意义。
@@ -112,6 +125,10 @@ type Router struct {
 	// exhaustedSink 观测回调：免费层**真的被试过**且全挂时触发（见 Route）。
 	// 它**不驱动路由** —— 兜底是每请求的，档位不参与决策。
 	exhaustedSink FreeExhaustedSink
+
+	// admission 实测能力准入选表（ADR-004 §四）。可为 nil / 空表 ——
+	// 此时**不做准入过滤**（回退到既有的 kinds 行为），见 filterByAdmission 注释。
+	admission *admission.Table
 }
 
 // 关于"层门控"（paidOnly / TierGate）为何被删除（2026-09-20，T-015）：
@@ -145,6 +162,42 @@ type orderedProvider struct {
 type Option func(*Router)
 
 // WithClient 注入 HTTP client（生产默认 30s 超时）。
+// WithAdmission 注入实测能力准入选表（ADR-004 §四）。
+// 不注入 / 传 nil / 表为空 —— 一律不做准入过滤，行为与注入前完全一致。
+func WithAdmission(t *admission.Table) Option {
+	return func(r *Router) { r.admission = t }
+}
+
+// filterByAdmission 按实测能力准入过滤候选模型（仅对**能力维度**生效）。
+//
+// 语义（ADR-004 §四）：
+//   - 表**可用**（非 nil 且非空）⇒ **严格**：只留该维度实测通过（total>0 且 passed==total）的模型。
+//     过滤成空时返回空切片，调用方会走"该 provider 没有该 kind 的模型"，自然轮到下一个 provider。
+//   - 表**不可用**（nil / 文件缺失 / 解析失败 / 空）⇒ **原样返回**，并**不静默** ——
+//     调用方会在 **/doctor** 上暴露准入表状态（不是 /health —— 那是数组，塞对象会破 dev-fleet 契约；
+//     见 admission.Table.Stats 与 proxy.doctor）。
+//
+// 为什么表不可用时 fail-open：表缺失 ≠ "所有模型都不合格"，而是"从未测过"。
+// 若据此让网关什么都不服务，一次漏挂载就能把整条供给打死。**但这件事必须可见**，
+// 否则就退化成"以为在按实测选型、其实没有"的静默降级 —— 那正是本项目最忌的形态。
+func (r *Router) filterByAdmission(models []string, kind string) []string {
+	if r.admission == nil || r.admission.Empty() {
+		return models
+	}
+	switch kind {
+	case admission.DimReasoning, admission.DimCoding:
+	default:
+		return models // 非能力维度（如 kind==""）不做准入过滤
+	}
+	out := make([]string, 0, len(models))
+	for _, m := range models {
+		if r.admission.Admitted(m, kind) {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
 func WithClient(c *http.Client) Option {
 	return func(r *Router) {
 		if c != nil {
@@ -264,6 +317,19 @@ type FreeExhaustedSink func()
 // 理由见上面「层门控为何被删除」。
 func (r *Router) Route(ctx context.Context, req RouteRequest) (Result, error) {
 	cands := r.candidates(req.Format, req.WantKind)
+	// 字面模型：若配置里**有 provider 声明**它，就把候选收窄到这些 provider。
+	//
+	// 为什么要收窄（而不是"照旧全试、只在失败时不短路"）：
+	// 对**不持有**该模型的 provider 发请求是纯粹浪费 —— 每个候选实测 60–80 秒
+	// （见 ErrContextTooLong 注释），且会把该 provider 记一次失败，而它其实没做错什么。
+	//
+	// 为什么"无人声明时"回退全量：聚合商可能服务配置里**没列出**的模型，
+	// 收窄成空会把本来可用的路径也堵死 ⇒ 此时保持既有行为（全试 + 首个 not-found 即终止）。
+	if !req.VirtualModel && req.Model != "" {
+		if decl := declaringCandidates(cands, req.Model); len(decl) > 0 {
+			cands = decl
+		}
+	}
 	if len(cands) == 0 {
 		if req.VirtualModel && req.WantKind != "" {
 			// 明确报错，不退而用一个不相干的模型——"要推理型"静默变成别的比失败更难查。
@@ -316,6 +382,11 @@ func (r *Router) Route(ctx context.Context, req RouteRequest) (Result, error) {
 			// **字面模型**点名要的东西没人有 —— 换谁都是同一个答案。
 			// 上抛让 proxy 翻成客户端认得的 `404 not_found_error`（它会显示
 			// "运行 /model 换一个"，人照做一句话即可）。
+			//
+			// ⚠️ 这句"换谁都是同一个答案"**只在候选已被收窄到"声明了该模型的 provider"时成立**
+			// （见 Route 开头的 declaringCandidates 收窄，2026-10-01 修）。
+			// 收窄之前它是个**错误前提**：agnes 与 xkiro 模型集不相交时，agnes 排在前、
+			// 永远先说"没有"，于是 xkiro 一次都轮不到，11 把 key 全成摆设。
 			//
 			// 虚拟模型走不到这里：它的模型名由我们解析，撤了就换同 provider 的下一个（T-018）。
 			return Result{Attempts: attempts}, fmt.Errorf("%w: %s", ErrModelNotFound, fail.Reason)
@@ -376,6 +447,24 @@ func (r *Router) Route(ctx context.Context, req RouteRequest) (Result, error) {
 // wantKind 非空（虚拟模型带类型）时额外按"该 provider 是否持有此类型的模型"过滤：
 // 选到不持有此类型的 provider 将无模型可改写，只能退而用不相干的模型——
 // 那比直接失败更难查（"我要推理型"静默变成了别的）。
+// declaringCandidates 过滤出**声明了**该模型的候选，顺序保持不变。
+//
+// "声明"= provider.Models 里有同 id 的条目。用于字面模型路由：只把请求交给真正持有它的
+// provider，而不是让排在前面、压根没有这个模型的服务商先答一句"不认识"就把链路掐断
+// （2026-10-01 血账，见 RouteRequest.Model 注释）。
+func declaringCandidates(cands []orderedProvider, model string) []orderedProvider {
+	var out []orderedProvider
+	for _, op := range cands {
+		for _, m := range op.pv.Models {
+			if m.ID == model {
+				out = append(out, op)
+				break
+			}
+		}
+	}
+	return out
+}
+
 func (r *Router) candidates(format config.Format, wantKind string) []orderedProvider {
 	free, paid := []orderedProvider{}, []orderedProvider{}
 	for i := range r.providers {
@@ -414,6 +503,13 @@ func (r *Router) tryCandidate(ctx context.Context, op *orderedProvider, req Rout
 	models := []string{""}
 	if req.VirtualModel {
 		models = ResolveModels(op.pv, req.WantKind)
+		// 按**实测能力准入**过滤（ADR-004 §四）。过滤成空 = 该 provider 没有该维度
+		// 实测通过的模型 ⇒ 报"没这个 kind 的模型"、自然轮到下一个 provider。
+		//
+		// ⚠️ 只对**虚拟模型**（`auto:*`）过滤，**字面模型不过滤**：
+		// 准入管的是"我们替你挑"的那个池；调用方点名要某个模型是它的显式选择，
+		// 网关不该越权否决（否则一句 `model: <我方未测模型>` 会莫名其妙被拒）。
+		models = r.filterByAdmission(models, req.WantKind)
 		if len(models) == 0 {
 			return provider.Result{}, provider.Fail{
 				Kind:   provider.FailUpstream,
@@ -542,6 +638,35 @@ type PoolHealth struct {
 	Unresolved int  `json:"unresolved"` // 未解析的占位符数（key 指针没取到值）
 	Cooling    int  `json:"cooling"`    // 冷却中的 key 数
 	BackedOff  bool `json:"backed_off"` // 池级退避中（全 key 挂过）
+}
+
+// AdmissionStats 实测能力准入表的状态（供 /doctor 暴露 —— 见 proxy.doctor 的说明：
+// 表不可用时会回退到 kinds，这件事必须可见，否则就是静默降级）。
+//
+// 未注入表 ⇒ active=false；表不可用 ⇒ active=false 且 err 非空。
+type AdmissionStatsShape struct {
+	Active    bool    `json:"active"`    // 是否真的在按实测选型
+	Models    int     `json:"models"`    // 表里的模型数
+	Reasoning int     `json:"reasoning"` // 推理维度准入数
+	Coding    int     `json:"coding"`    // 编程维度准入数
+	MinRatio  float64 `json:"min_ratio"` // 当前准入线（0.8 = 通过率 ≥80%）
+	Err       string  `json:"err,omitempty"`
+}
+
+func (r *Router) AdmissionStats() AdmissionStatsShape {
+	if r.admission == nil {
+		return AdmissionStatsShape{Active: false, MinRatio: 1.0,
+			Err: "未注入准入表（选型回退到人工 kinds）"}
+	}
+	m, rs, c, errStr := r.admission.Stats()
+	return AdmissionStatsShape{
+		Active:    !r.admission.Empty(),
+		Models:    m,
+		Reasoning: rs,
+		Coding:    c,
+		MinRatio:  r.admission.MinRatio(),
+		Err:       errStr,
+	}
 }
 
 // Health 返回全部 provider 池的状态快照（/health 端点）。

@@ -110,6 +110,24 @@ type Config struct {
 
 	Providers []Provider `json:"providers"`
 
+	// AdmissionPath 实测能力准入选表的路径（外部评估工具产出的 JSON，格式见 internal/admission）。
+	//
+	// 2026-10-01（ADR-004 §四）：选型此前只读**人工写的 kinds**；接上它之后
+	// `auto:reasoning` / `auto:coding` 改为在该维度**实测通过**的模型里挑。
+	//
+	// 留空 / 文件不存在 / 解析失败 ⇒ **不做准入过滤**（回退既有行为），
+	// 且状态在 /doctor 上暴露 —— 不静默降级。详见 internal/admission 包注释。
+	AdmissionPath string `json:"admission_path,omitempty"`
+
+	// AdmissionMinRatio 某维度的准入线：passed/total ≥ 本值才算过。
+	//
+	// 缺省 / 0 / >1 一律按 **1.0（全过）** 处理 —— **不配置就与接入前完全一致**。
+	//
+	// 为什么可配（2026-10-01 用户定，方案 A）：题组只有 5 道，多对一道就是 80% vs 100%，
+	// "全过"在小样本上等于"完美或零"，实测导致**编程池为空**（最好的模型 4/5）。
+	// 阈值让"多严"成为可调的决定，而不是写死在代码里。
+	AdmissionMinRatio float64 `json:"admission_min_ratio,omitempty"`
+
 	// AutoAdded 本次加载从 models.auto.json 追加进来的模型条数（不参与序列化）。
 	// 存在的意义是"纳新到底有没有生效"要能被看见——一个悄悄不生效的机制
 	// 与没有这个机制没有区别（T-014 的教训）。

@@ -78,11 +78,28 @@ All core routing works. Monitoring features gracefully disable when vault/NATS a
 | **Key resolution** | `env:` keys work without vault | Use `env:` prefix for keys or `VAULT_BIN` env var |
 | **Monitoring/NATS** | ❌ Optional | Missing = no-op, gateway still serves requests |
 | **WorkBoard UI** | ❌ Optional | Separate frontend repo, not needed for operation |
+| **Measured-capability admission** | ❌ Optional | Point `admission_path` at a JSON table of externally-measured results; see below |
 
 **Default behavior without infrastructure:**
 - No vault → keys with `vault:` prefix show as "unresolved", excluded from pool
 - No NATS → no status publishing to WorkBoard, but `/health` endpoint still works locally
 - Gateway remains fully functional with any keys that resolve successfully
+- No admission table → `auto:*` routes by the hand-written `kinds` in your config (unchanged behavior)
+
+### Measured-capability admission (optional)
+
+By default `auto:coding` / `auto:reasoning` pick among models whose `kinds` **you** declared by hand —
+a claim, not a measurement. You can replace that claim with evidence: point `admission_path` at a
+JSON table produced by **any** external tool that probes your upstreams directly (see the
+`internal/admission` package doc for the exact schema — that Go struct *is* the contract).
+
+The table then does two things: it **filters** candidates at request time (a model with no measured
+sample in that dimension is not eligible), and it **fills the pools** — a model you measured as
+coding-capable is added to the coding pool even if your config never lists it. It is optional,
+hot-reloadable, and fails safe: a missing or unreadable table falls back to `kinds` and says so on
+`/doctor` (`admission.active`), rather than silently emptying the pool.
+
+This project ships **no** evaluator and does not depend on one existing.
 
 ---
 

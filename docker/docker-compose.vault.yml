@@ -39,6 +39,29 @@ services:
       - ./runtime:/run/mt-tokens:ro
       # NATS 客户端凭据——ro。缺了它发布器静默降级 no-op（路由主链路不受影响）。
       - C:/Users/aimly/.local/share/nats/nsc/keys/creds/AImlyCloud/AImlyCloud/bridge.creds:/run/secrets/nats/bridge.creds:ro
+
+      # ── 实测能力准入选表（ADR-004 §四）——**当前未启用，故意注释掉** ──
+      #
+      # 为什么不直接打开：mt-deploy.sh 的 pre-flight 要求 bind 源**必须存在且是文件**
+      #（不然 Docker 会把缺失的源自动建成目录 —— 那是更难查的故障）。源文件还没有，
+      # 打开会让**每一次部署都失败**，包括每日自动任务。故先备好、不启用。
+      #
+      # 启用三步（缺一不可）：
+      #   ① 拷产物到宿主：
+      #        cp <评估器 --out 目录>/admitted.json \
+      #           E:/AImlyForge/tools/agent/moretoken/docker/runtime/admitted.json
+      #   ② 解开下面那行挂载的注释
+      #   ③ config/config.json 顶层加一行：
+      #        "admission_path": "/run/admission/admitted.json"
+      #      然后 bash docker/mt-deploy.sh
+      #
+      # 判据（必须看这个，别看脚本报"成功"）：
+      #   curl -s :8462/doctor -H "Authorization: Bearer <token>" 里的
+      #   `admission.active == true` 才算真接上；仍是 false 就是没生效。
+      #
+      # ⚠️ 挂载 **ro**：容器只读、宿主是唯一写者（与 tokens.json 同款）。
+      # ⚠️ 热加载已接线（admission.Table.Watch，30s 轮询 mtime）⇒ 表更新**不必重启容器**。
+      # - ./runtime/admitted.json:/run/admission/admitted.json:ro
     environment:
       # NATS 发布（T-005/T-014）：容器内用 linux nats CLI（镜像已 pin sha256 装入 /usr/local/bin）。
       NATS_SERVERS: "nats://www.aimly.top:14222"

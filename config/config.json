@@ -279,5 +279,6 @@
         }
       ]
     }
-  ]
+  ],
+  "admission_min_ratio": 0.8
 }

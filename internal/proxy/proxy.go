@@ -117,15 +117,24 @@ func (s *Server) doctor(w http.ResponseWriter, _ *http.Request) {
 	snap := s.mwin.Snapshot() // nil 安全：没挂指标时是零值
 	esc, reason := metrics.Escalate(snap, s.escalateAfter)
 
+	// 实测能力准入表的状态（ADR-004 §四）。
+	//
+	// ⚠️ 为什么必须暴露：表不可用时选型会**回退到人工写的 kinds** —— 那是唯一的 fail-open
+	//（表缺失 ≠ 所有模型不合格，而是"从未测过"）。若不把它摆出来，就退化成
+	// "以为在按实测选型、其实没有"的静默降级，正是本项目最忌的形态。
+	// 放在 /doctor 而不是 /health：/health 是**数组**（各池状态），dev-fleet 的闸按数组解析，
+	// 往里塞对象会破坏契约；/doctor 本就是"网关状态如何"的对象端点，加字段安全。
+	adm := s.r.AdmissionStats()
+
 	w.Header().Set("Content-Type", "application/json")
 	if esc {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"status": "escalate", "reason": reason, "metrics": snap,
+			"status": "escalate", "reason": reason, "metrics": snap, "admission": adm,
 		})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "metrics": snap})
+	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "metrics": snap, "admission": adm})
 }
 
 // contextMessage 从 router 的错误里抠出**客户端认的那句**。
@@ -248,12 +257,21 @@ func (s *Server) chatHandler(format config.Format) http.HandlerFunc {
 		// 首块是否已上线（=200 已不可撤回）。Route 同步调用 StreamCB，无并发。
 		wroteChunk := false
 
+		// 字面模型名（虚拟模型留空）：路由器据此把候选收窄到**声明了该模型**的 provider。
+		// 不这么做的话，排在前面、压根没有这个模型的服务商会先答一句"不认识"就把链路掐断
+		// —— 2026-10-01 血账，见 router.RouteRequest.Model 注释。
+		litModel := ""
+		if !virtual {
+			litModel = probe.Model
+		}
+
 		res, ferr := s.r.Route(req.Context(), router.RouteRequest{
 			Format:       format,
 			Body:         body,
 			Kind:         kind,
 			VirtualModel: virtual,
 			WantKind:     wantKind,
+			Model:        litModel,
 			StreamCB: func(chunk []byte) {
 				if stream {
 					// 原样透传 SSE 数据块（provider 已剥 data: 前缀；这里补回线格式）。
