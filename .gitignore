@@ -6,10 +6,12 @@
 *.exe~
 scripts/bin/
 
-# ai-guard 运行态（会话/任务状态，不入库）
-.claude/read_tracker.json
-.claude/context-snapshot.md
-.claude/metrics/
+# .claude/ **整个目录**不入库（用户定规，2026-10-01）。
+# 原先只挡其中 3 条，而 settings.json 是**被跟踪的** —— 于是它会随仓发布，
+# 且每次本机调权限/hooks 都会产生 diff。改为整目录一律排除，不再逐条列举
+#（逐条列举 = 新增文件默认入库，正是 settings.json 漏出去的原因）。
+# ⚠️ 只是不入库；**本机文件保留**，Claude Code 照常读取。
+.claude/
 
 # generic 形态的真实 API key 文件（T-029）——明文，绝不入库；只有 .example 模板入库。
 docker/.env.keys
