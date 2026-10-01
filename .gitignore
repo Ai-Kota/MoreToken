@@ -20,3 +20,15 @@ docker/.env.keys
 # 单机部署，注册表随本机磁盘/备份存续；新机重新 mt-deploy + token-gen 即可。
 docker/runtime/
 config/tokens.json
+
+# 自动纳新清单 = 生成物（T-018），不入库 —— 与上面的 config/tokens.json 同型判定（2026-10-01）。
+# 三条判据：
+#  ① **代码自己这么说的**：internal/config/auto.go 自述「自动纳新清单（生成物）」，
+#     且注释强调它与「**手写的** config.json」对立 —— 生成物 vs 源，界已划好。
+#  ② **内容是本部署专属**：agnes / xkiro 各入口的 verified/rejected 实测台账。
+#     别人克隆拿到的是一份与他无关的清单 —— 他要自己去发现自己的上游。
+#  ③ **可由重跑 harvest 重建**：真相源 = 上游目录 + 真调实测，不靠仓库保存。
+# 代价对比：入库 ⇒ harvest 每轮改 generated_at ⇒ **树恒脏**，正是"分不清真改动与机器噪音"
+# 的病根（本仓为此专门清过一次）；不入库 ⇒ 零损失。
+# 反证：docker/ 与 Dockerfile 均不引用它 ⇒ 不存在"克隆即有"的依赖。
+config/models.auto.json
