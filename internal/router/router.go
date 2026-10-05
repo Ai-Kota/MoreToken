@@ -538,7 +538,10 @@ func (r *Router) tryCandidate(ctx context.Context, op *orderedProvider, req Rout
 			body = rewritten
 		}
 
-		for attempt := 0; attempt < 3; attempt++ {
+		// keyAttempts：同一 model 下最多试几把 key。默认 3；FailDenied（403）
+		// 会把上界抬到**池子大小**——理由见下面的 FailDenied 分支（403 即时且不改状态）。
+		keyAttempts := 3
+		for attempt := 0; attempt < keyAttempts; attempt++ {
 			key, ok := op.pool.Select()
 			if !ok {
 				// 全 key 冷却 → 该 provider 不可用，标记池级退避并 fallback 下一候选。
@@ -589,6 +592,27 @@ func (r *Router) tryCandidate(ctx context.Context, op *orderedProvider, req Rout
 				// 上下文是**请求**的属性：换模型/换 key 都是同一个答案，直接上抛。
 				return res, fail, false, m
 			}
+			if fail.Kind == provider.FailDenied {
+				// **403 是 key 级事实**（T-035，2026-10-05 受控实验实测）。
+				//
+				// 实验：同一个模型 `qwen/qwen3-max:free`，同一个上游 api.xkiro.com，
+				// 逐把 key 直打 —— **4 把回 200、4 把回 403、1 把 429**。
+				// 即"这个账号对这个模型没权限"是**按 key** 的，不是按模型的。
+				//
+				// 而本处原先只换模型、**不换 key** ⇒ 抽到无权限的那把就白扔半个池子。
+				// 这正是"不能循环找活模型"的根。
+				//
+				// 修法**守住 2026-09-20 的成果**：**不 RecordDead**（403 不惩罚 key ——
+				// 那条结论对"不要长禁 key"仍然正确，且长禁会把整层下线一小时）。
+				// 只补上缺的那半句：**换一把 key 再试**。
+				//
+				// 403 即时返回、无任何状态副作用，故把它试尽（上界 = 池子大小），
+				// 而不是像 429/401 那样受默认 3 把的限制。
+				if op.pool.Len() > keyAttempts {
+					keyAttempts = op.pool.Len()
+				}
+				continue
+			}
 			// 注意 FailModelNotFound **不在此列**：对虚拟模型它该走下面的"换同 provider 的
 			// 下一个模型"（T-018：上游悄悄撤了某个模型，同 provider 还有别的）；
 			// 只有**字面**模型才是请求级的确定性失败，由 Route 显式短路。
@@ -596,9 +620,9 @@ func (r *Router) tryCandidate(ctx context.Context, op *orderedProvider, req Rout
 			//
 			//   - FailUpstream（5xx）：上游对"不认识的模型名"未必回 404——
 			//     agnes 回的就是 503 model_not_found（见 TROUBLESHOOTING §3）。
-			//   - FailDenied（403）：实测证明是"账号对这个模型没权限"，凭据是好的
-			//     （同一把 key 对别的模型 200）。它**不碰 key**——403 曾与 401 同归
-			//     FailAuth，于是无权模型会把该 provider 的 key 逐个长禁、整层下线一小时。
+			//   - FailDenied（403）：**已在上面的分支单独处理**（T-035）——
+			//     403 是 **key 级**事实，换一把 key 重试；但**不** RecordDead。
+			//     （2026-09-20 的"不要长禁 key"仍然成立；当年缺的是"换一把再试"。）
 			// 有下一个模型就先换模型；没有才落到 provider 级 fallback。
 			if mi+1 < len(models) {
 				break
