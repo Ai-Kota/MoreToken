@@ -11,7 +11,7 @@
 |------|------|
 | **会话日期** | 2026-09-29 15:05:50 |
 | **执行任务** | T-030 |
-| **完成状态** | 🔄 进行中 |
+| **完成状态** | ✅ 进行中 |
 | **会话摘要** | 带外证据链布设完成（重启前入库）：boot-verify.sh（记 LastBootUpTime 基准+轮询 daemon/容器+端点三连+vault-token 全链+freellm 旁证，FAIL 附恢复命令）+ Startup vbs 隐藏宿主（wscript 实测触发 log 10→20 行全 PASS）。基线跑全 PASS。**下个会话第一件事：读 docker/runtime/boot-verify.log 里 BOOT=新时刻（今天 15:0x 之后）的段落核销 #12a/b/c，然后 dev-fleet monitor 新配置生效验证（/doctor 401 噪音应消失），T-030 收尾提交** |
 
 ---
