@@ -54,6 +54,8 @@ func main() {
 		"连续失败超过此时长即判「自愈失效」（默认 2× 免费层自愈承诺）")
 	var doctor bool
 	flag.BoolVar(&doctor, "doctor", false, "（客户端模式）读运行中网关的 /doctor 并据结果决定退出码，不启动服务")
+	var platforms bool
+	flag.BoolVar(&platforms, "platforms", false, "平台发现：注册表 × vault × config 三向 diff，列出「我们还缺哪些平台」（只读，不接线）")
 	var doctorURL string
 	flag.StringVar(&doctorURL, "doctor-url", "http://127.0.0.1:8462/doctor", "（客户端模式）/doctor 地址")
 
@@ -98,6 +100,9 @@ func main() {
 	}
 	if check {
 		os.Exit(runCoverageCheck(cfg))
+	}
+	if platforms {
+		os.Exit(runPlatforms(cfg, configPath))
 	}
 	if harvest {
 		os.Exit(runHarvest(cfg, configPath, harvestTTL, harvestMax, harvestDelay))

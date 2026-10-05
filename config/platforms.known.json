@@ -1,0 +1,42 @@
+{
+  "_comment": "已知 LLM 平台注册表（T-037）。供 `moretoken -platforms` 做三向 diff：已知 × 有 key(vault) × 已接线(config)。种子取自 freellmapi 的平台注册表（another/FreeToken/freellmapi/server/src/providers/index.ts，含 base_url）+ 本机在用平台。",
+  "_schema": {
+    "platform": "vault 命名空间用的平台名（freellm/provider/<platform>/…）",
+    "base_url": "上游 base（不含端点名；moretoken 自补 /chat/completions 或 /v1/messages）",
+    "format": "openai | anthropic",
+    "homepage": "去哪拿免费 key"
+  },
+  "platforms": [
+    { "platform": "agnes",       "name": "Agnes AI",              "base_url": "https://apihub.agnes-ai.com/v1",     "format": "openai", "homepage": "https://agnes-ai.com" },
+    { "platform": "ainative",    "name": "AINative Studio",       "base_url": "https://api.ainative.studio/api/v1", "format": "openai", "homepage": "https://ainative.studio" },
+    { "platform": "aion",        "name": "Aion Labs",             "base_url": "https://api.aionlabs.ai/v1",         "format": "openai", "homepage": "https://aionlabs.ai" },
+    { "platform": "anyapi",      "name": "AnyAPI",                "base_url": "https://api.anyapi.ai/v1",           "format": "openai", "homepage": "https://anyapi.ai" },
+    { "platform": "bai",         "name": "B.AI",                  "base_url": "https://api.b.ai/v1",                "format": "openai", "homepage": "https://b.ai" },
+    { "platform": "bazaarlink",  "name": "BazaarLink",            "base_url": "https://bazaarlink.ai/api/v1",       "format": "openai", "homepage": "https://bazaarlink.ai" },
+    { "platform": "cerebras",    "name": "Cerebras",              "base_url": "https://api.cerebras.ai/v1",         "format": "openai", "homepage": "https://cloud.cerebras.ai" },
+    { "platform": "cloudflare",  "name": "Cloudflare Workers AI", "base_url": "https://api.cloudflare.com/client/v4/accounts/<account_id>/ai/v1", "format": "openai", "homepage": "https://dash.cloudflare.com" },
+    { "platform": "github",      "name": "GitHub Models",         "base_url": "https://models.github.ai/inference", "format": "openai", "homepage": "https://github.com/settings/tokens" },
+    { "platform": "groq",        "name": "Groq",                  "base_url": "https://api.groq.com/openai/v1",     "format": "openai", "homepage": "https://console.groq.com/keys" },
+    { "platform": "huggingface", "name": "HuggingFace Router",    "base_url": "https://router.huggingface.co/v1",   "format": "openai", "homepage": "https://huggingface.co/settings/tokens" },
+    { "platform": "kilo",        "name": "Kilo Gateway",          "base_url": "https://api.kilo.ai/api/gateway/v1", "format": "openai", "homepage": "https://kilo.ai" },
+    { "platform": "llm7",        "name": "LLM7",                  "base_url": "https://api.llm7.io/v1",             "format": "openai", "homepage": "https://llm7.io" },
+    { "platform": "longcat",     "name": "LongCat",               "base_url": "https://api.longcat.chat/openai/v1", "format": "openai", "homepage": "https://longcat.chat" },
+    { "platform": "mistral",     "name": "Mistral",               "base_url": "https://api.mistral.ai/v1",          "format": "openai", "homepage": "https://console.mistral.ai" },
+    { "platform": "nara",        "name": "NaraRouter",            "base_url": "https://router.bynara.id/v1",        "format": "openai", "homepage": "https://bynara.id" },
+    { "platform": "nvidia",      "name": "NVIDIA NIM",            "base_url": "https://integrate.api.nvidia.com/v1", "format": "openai", "homepage": "https://build.nvidia.com" },
+    { "platform": "ollama",      "name": "Ollama Cloud",          "base_url": "https://ollama.com/v1",              "format": "openai", "homepage": "https://ollama.com" },
+    { "platform": "opencode",    "name": "OpenCode Zen",          "base_url": "https://opencode.ai/zen/v1",         "format": "openai", "homepage": "https://opencode.ai" },
+    { "platform": "orcarouter",  "name": "OrcaRouter",            "base_url": "https://api.orcarouter.ai/v1",       "format": "openai", "homepage": "https://orcarouter.ai" },
+    { "platform": "openrouter",  "name": "OpenRouter",            "base_url": "https://openrouter.ai/api/v1",       "format": "openai", "homepage": "https://openrouter.ai/keys" },
+    { "platform": "ovh",         "name": "OVH AI Endpoints",      "base_url": "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1", "format": "openai", "homepage": "https://endpoints.ai.cloud.ovh.net" },
+    { "platform": "qianfan",     "name": "Baidu Qianfan",         "base_url": "https://qianfan.baidubce.com/v2",    "format": "openai", "homepage": "https://console.bce.baidu.com/qianfan" },
+    { "platform": "qwen",        "name": "Alibaba DashScope",     "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "format": "openai", "homepage": "https://bailian.console.aliyun.com" },
+    { "platform": "reka",        "name": "Reka",                  "base_url": "https://api.reka.ai/v1",             "format": "openai", "homepage": "https://platform.reka.ai" },
+    { "platform": "requesty",    "name": "Requesty",              "base_url": "https://router.requesty.ai/v1",      "format": "openai", "homepage": "https://requesty.ai" },
+    { "platform": "sealion",     "name": "SEA-LION",              "base_url": "https://api.sea-lion.ai/v1",         "format": "openai", "homepage": "https://sea-lion.ai" },
+    { "platform": "siliconflow", "name": "SiliconFlow",           "base_url": "https://api.siliconflow.com/v1",     "format": "openai", "homepage": "https://cloud.siliconflow.cn" },
+    { "platform": "unorouter",   "name": "UnoRouter",             "base_url": "https://api.unorouter.com/v1",       "format": "openai", "homepage": "https://unorouter.com" },
+    { "platform": "volcengine",  "name": "Volcengine Ark",        "base_url": "https://ark.cn-beijing.volces.com/api/v3", "format": "openai", "homepage": "https://console.volcengine.com/ark" },
+    { "platform": "xkiro",       "name": "xKiro",                 "base_url": "https://api.xkiro.com/v1",           "format": "openai", "homepage": "https://xkiro.com" }
+  ]
+}
