@@ -46,6 +46,8 @@
 
 | T-036 | OpenRouter 接入 moretoken（agnes-6 实测准入，合格线 3/5） | ✅ | **已完成并上线**。用户定规"**测试合格的才有资格进入 moretoken**"，合格线 **3/5（60%）**（用户 2026-10-05 选定）。评估器在**容器内直打上游**（绕开本机 TLS 中间人）跑 `agnes-6` 十题；12/18 个免费模型测到有效数据，尾部 6 个被 OpenRouter **50 次/天/账号**额度卡掉。**只接入合格者**（5 个：nemotron-3-super-120b 4/5+4/5、ling-3.0-sante 3/5+3/5、dots-3 3/5+3/5、nemotron-3-ultra 3/5+1/5、north-mini-code 2/5+3/5）。新增 `openrouter-anthropic` provider（base `https://openrouter.ai/api`，anthropic 协议，实测通）。未合格/未测者不入。详见 `docs/tasks/T-036.md` |
 
+| T-037 | 平台发现——注册表 × vault × config 三向 diff | ✅ | **已完成**。真根：`catalog.Harvester` 只对 `cfg.Providers` **已声明**的 provider 发现新**模型**（`for i := range cfg.Providers`），**永远不会发现新平台** ⇒ 池子大小由人手写的 provider 列表定死。交付：`config/platforms.known.json`（种子取自 freellmapi 的平台注册表，~30 平台含 base_url）+ `moretoken -platforms` 只读子命令，输出三桶：✅已接线 / ⚠️有 key 未接线 / 🆕**已知但无 key（用户去注册）**。详见 `docs/tasks/T-037.md` |
+
 ## 存量登记说明
 
 - v4.0"会话保持型路由网关"（Phase 1 完成）已归档提交 `15d8f68`，作为设计历史
