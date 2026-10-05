@@ -48,6 +48,8 @@
 
 | T-037 | 平台发现——注册表 × vault × config 三向 diff | ✅ | **已完成**。真根：`catalog.Harvester` 只对 `cfg.Providers` **已声明**的 provider 发现新**模型**（`for i := range cfg.Providers`），**永远不会发现新平台** ⇒ 池子大小由人手写的 provider 列表定死。交付：`config/platforms.known.json`（种子取自 freellmapi 的平台注册表，~30 平台含 base_url）+ `moretoken -platforms` 只读子命令，输出三桶：✅已接线 / ⚠️有 key 未接线 / 🆕**已知但无 key（用户去注册）**。详见 `docs/tasks/T-037.md` |
 
+| T-038 | 归档 2026-10-05 供给加固（事故档 + 索引） | ✅ | **已完成**。用户指令"总结一下前面的内容，保存到项目合适的位置"。交付 docs/incidents/2026-10-05-autoreasoning-leak-and-supply.md（按 09-20 体例把 T-031..T-037 收成一篇）。 |
+
 ## 存量登记说明
 
 - v4.0"会话保持型路由网关"（Phase 1 完成）已归档提交 `15d8f68`，作为设计历史
