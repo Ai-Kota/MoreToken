@@ -144,9 +144,14 @@ var modelNotFoundMarkers = []string{
 }
 
 // isModelNotFound 这个错误体是不是"上游没有这个模型"。
+//
+// 两条判据取或：① **结构化**（Anthropic 规范形状）② 措辞（OpenAI 味 marker）。
 func isModelNotFound(body []byte) bool {
 	if len(body) == 0 {
 		return false
+	}
+	if isAnthropicNotFound(body) {
+		return true
 	}
 	s := strings.ToLower(string(body))
 	for _, m := range modelNotFoundMarkers {
@@ -155,6 +160,33 @@ func isModelNotFound(body []byte) bool {
 		}
 	}
 	return false
+}
+
+// isAnthropicNotFound 识别 Anthropic 规范的"资源不存在"形状（T-032）：
+//
+//	{"type":"error","error":{"type":"not_found_error","message":"model: <id>"}}
+//
+// 为什么不把 `not_found_error` 塞进上面的 marker 子串表（用户定过「宁可窄」，见上）：
+// 误判代价不对称——把"上游故障"误判成"模型不存在"会让本该重试的失败变成终局。
+// 而 `error.type` 是**结构化字段**（不是散文），比任何子串都具体；反过来看，
+// 在 `/v1/messages` 上，`not_found_error` 本就是"这个模型不存在"的确定性答复，
+// 不是瞬态故障，误判风险低。**裸匹配 `model: ` 之类的子串则会误伤无关错误体**——
+// 所以认的是 JSON 结构，不是措辞。
+//
+// 影响（T-031 钉住的缺陷）：xkiro-anthropic 对已退役 `minimax/minimax-m3:free` 回的
+// 规范 404，此前归 `FailNone` ⇒ 在 tryCandidate"无下一个模型"处 `done=true` ⇒ 就地终止、
+// 把 404 透传给客户端；本判据使它归入 `FailModelNotFound` ⇒ 返回 `done=false`（router.go:606）
+// ⇒ **沿候选链继续**（全耗尽则落 503 网关侧失败）。
+func isAnthropicNotFound(body []byte) bool {
+	var e struct {
+		Error struct {
+			Type string `json:"type"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(body, &e) != nil {
+		return false
+	}
+	return strings.EqualFold(e.Error.Type, "not_found_error")
 }
 
 // contextMarkers 上下文超限的识别特征（小写匹配）。
@@ -181,7 +213,7 @@ var contextTokenRe = regexp.MustCompile(`(?i)\(?(\d{3,})\s*tokens?\)?[^0-9]{0,40
 // canonicalContextReason 把各家上游的超限原文**翻译成客户端认得的措辞**。
 //
 // 为什么必须翻译而不是自造：Claude Code 里那条判据是写死的正则
-//（从它的二进制里挖出来）：
+// （从它的二进制里挖出来）：
 //
 //	/prompt is too long[^0-9]*(\d+)\s*tokens?\s*>\s*(\d+)/i
 //	→ {actualTokens, limitTokens}

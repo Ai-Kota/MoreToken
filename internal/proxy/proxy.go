@@ -527,12 +527,35 @@ func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 	json.NewEncoder(w).Encode(s.r.Health())
 }
 
-// routerEntry 把 router.Result 转成决策日志条目（密钥安全：只记 providerID + retried）。
+// routerEntry 把 router.Result 转成决策日志条目。
+//
+// 密钥安全：只记 providerID / retried / 上游**错误体**（错误体不含我方凭据；
+// 与 provider.go 里 `status %d: <body>` 的既有留痕口径一致）。
 func routerEntry(res router.Result) DecisionEntry {
+	reason := res.Fail.Reason
+	// **透传路径要留上游原文**（T-031）。
+	//
+	// 4xx/5xx 透传（未归类为 FailModelNotFound 等）时 `Fail.Kind==FailNone`、`Reason` 为空，
+	// 但 `res.Body` 正是上游说的话——而它就是唯一的线索。
+	// 不记的话，`/decisions` 里那条 404/400 只剩 `status`，回答不了"上游到底说了什么"，
+	// 正是本仓「吸收即销毁证据」要堵的形态。2026-10-05 排查 cc-ft 的 404 现场时，
+	// 那三条记录里 `reason` 全空，只能靠推断——这条就是补上它。
+	if reason == "" && res.StatusCode >= 400 && len(res.Body) > 0 {
+		reason = "upstream: " + truncateForLog(res.Body, 300)
+	}
 	return DecisionEntry{
 		ProviderID: res.ProviderID,
 		Retried:    res.Retried,
-		Reason:     res.Fail.Reason,
+		Reason:     reason,
 		Status:     res.StatusCode,
 	}
+}
+
+// truncateForLog 截断上游原文到 n 字节（给 `/decisions` 留痕用）。
+// 按字节截断可能切到多字节字符中段——错误体本就是给人看的，可接受（同 provider.truncate）。
+func truncateForLog(b []byte, n int) string {
+	if len(b) <= n {
+		return string(b)
+	}
+	return string(b[:n]) + "…"
 }
