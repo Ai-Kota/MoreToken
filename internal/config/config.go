@@ -148,6 +148,19 @@ type Config struct {
 	//   - 显式 0 ⇒ 关（回归闸：行为与启用前完全一致，只走 60s 短冷却）。
 	//   - ≥1 ⇒ 生效该阈值。
 	RateLimitDailyBan *int `json:"rate_limit_daily_ban,omitempty"`
+
+	// AllowPaidFallback 虚拟模型（auto / auto:*）是否允许 fallback 进**付费**层（T-042）。
+	//
+	// 用户定性（2026-10-07）："付费大模型兜底是个伪命题，应该是免费大模型循环切换
+	// 兜底"——日常任务 100% 压免费池；付费 key 只服务基建维护（**字面模型点名直连**，
+	// 那条路不受本字段影响，永远可用）。免费全挂 ⇒ 503 + 等日额度重置（T-040 配套）。
+	//
+	// 指针语义（同 RateLimitDailyBan 先例，区分"没配"与"配 false"）：
+	//   - nil（未配置）⇒ **false**（新政策：虚拟模型不进付费层）——行为变化，
+	//     升级说明见 CHANGELOG；
+	//   - 显式 false ⇒ 同 nil；显式 true ⇒ 恢复"免费挂转付费"旧行为
+	//     （回滚闸，供 2026-09-20 型事故排查时临时开）。
+	AllowPaidFallback *bool `json:"allow_paid_fallback,omitempty"`
 }
 
 // Load 从 JSON 文件加载并校验配置。

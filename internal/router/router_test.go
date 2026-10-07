@@ -338,3 +338,112 @@ func contains(s, sub string) bool {
 	}
 	return false
 }
+
+// TestRouter_VirtualModel_NoPaidByDefault —— T-042 新政策（默认）：
+// 虚拟模型（auto:*）在免费池全挂时 **503 耗尽**，付费池命中恒 0。
+// 判据：免费全冷却 + 付费可用 + 默认配置 ⇒ 请求失败且付费 0 命中（区别于 T-039 前的旧行为）。
+func TestRouter_VirtualModel_NoPaidByDefault(t *testing.T) {
+	var paidHits int32
+	freeSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", "60")
+		http.Error(w, `{"error":"rl"}`, http.StatusTooManyRequests)
+	}))
+	paidSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&paidHits, 1)
+		w.Write([]byte(`{"content":"anth-paid"}`))
+	}))
+	t.Cleanup(func() { freeSrv.Close(); paidSrv.Close() })
+
+	cfg := &config.Config{Providers: []config.Provider{
+		{ID: "anth-free", BaseURL: freeSrv.URL + "/anthropic", Format: "anthropic", Tier: "free",
+			Keys: []string{"k"}, Models: []config.Model{{ID: "m"}}},
+		{ID: "anth-paid", BaseURL: paidSrv.URL + "/anthropic", Format: "anthropic", Tier: "paid",
+			Keys: []string{"k"}, Models: []config.Model{{ID: "m"}}},
+	}}
+	r := New(cfg, WithClient(http.DefaultClient))
+	body := `{"model":"auto","messages":[{"role":"user","content":"x"}]}`
+	_, err := r.Route(context.Background(), RouteRequest{
+		Format: config.FormatAnthropic, Body: []byte(body), Kind: provider.NonStreaming,
+		VirtualModel: true,
+	})
+	if err == nil {
+		t.Fatal("免费全 429 且默认禁付费兜底：应 503 耗尽，实际成功")
+	}
+	if got := atomic.LoadInt32(&paidHits); got != 0 {
+		t.Errorf("paid hits = %d, want 0（T-042 默认不进付费层）", got)
+	}
+}
+
+// TestRouter_VirtualModel_PaidRollbackGate —— 回滚闸：显式 allow_paid_fallback=true
+// 时恢复"免费挂转付费"旧行为（2026-09-20 型事故排查用）。
+func TestRouter_VirtualModel_PaidRollbackGate(t *testing.T) {
+	var paidHits int32
+	freeSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", "60")
+		http.Error(w, `{"error":"rl"}`, http.StatusTooManyRequests)
+	}))
+	paidSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&paidHits, 1)
+		w.Write([]byte(`{"content":"anth-paid"}`))
+	}))
+	t.Cleanup(func() { freeSrv.Close(); paidSrv.Close() })
+
+	allow := true
+	cfg := &config.Config{Providers: []config.Provider{
+		{ID: "anth-free", BaseURL: freeSrv.URL + "/anthropic", Format: "anthropic", Tier: "free",
+			Keys: []string{"k"}, Models: []config.Model{{ID: "m"}}},
+		{ID: "anth-paid", BaseURL: paidSrv.URL + "/anthropic", Format: "anthropic", Tier: "paid",
+			Keys: []string{"k"}, Models: []config.Model{{ID: "m"}}},
+	}, AllowPaidFallback: &allow}
+	r := New(cfg, WithClient(http.DefaultClient))
+	body := `{"model":"auto","messages":[{"role":"user","content":"x"}]}`
+	res, err := r.Route(context.Background(), RouteRequest{
+		Format: config.FormatAnthropic, Body: []byte(body), Kind: provider.NonStreaming,
+		VirtualModel: true,
+	})
+	if err != nil {
+		t.Fatalf("开闸后应落到付费成功，实际 %v", err)
+	}
+	if !contains(string(res.Body), "anth-paid") {
+		t.Errorf("expected paid fallback, body=%s", res.Body)
+	}
+	if got := atomic.LoadInt32(&paidHits); got != 1 {
+		t.Errorf("paid hits = %d, want 1", got)
+	}
+}
+
+// TestRouter_LiteralModel_PaidStillDirect —— 字面模型点名付费档**不受 T-042 影响**：
+// 基建工具显式要 agnes-3.0-flash 仍直达（付费 key 的既有用途不缩水）。
+func TestRouter_LiteralModel_PaidStillDirect(t *testing.T) {
+	var paidHits int32
+	freeSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(`{"content":"free"}`))
+	}))
+	paidSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&paidHits, 1)
+		w.Write([]byte(`{"content":"paid-direct"}`))
+	}))
+	t.Cleanup(func() { freeSrv.Close(); paidSrv.Close() })
+
+	cfg := &config.Config{Providers: []config.Provider{
+		{ID: "anth-free", BaseURL: freeSrv.URL + "/anthropic", Format: "anthropic", Tier: "free",
+			Keys: []string{"k"}, Models: []config.Model{{ID: "m-free"}}},
+		{ID: "anth-paid", BaseURL: paidSrv.URL + "/anthropic", Format: "anthropic", Tier: "paid",
+			Keys: []string{"k"}, Models: []config.Model{{ID: "m-paid"}}},
+	}}
+	r := New(cfg, WithClient(http.DefaultClient))
+	// 字面模型 m-paid 只有付费 provider 声明它 ⇒ 收窄直达付费（T-033 既有语义，不缩水）。
+	res, err := r.Route(context.Background(), RouteRequest{
+		Format: config.FormatAnthropic, Body: []byte(`{"model":"m-paid","messages":[]}`),
+		Kind: provider.NonStreaming, Model: "m-paid",
+	})
+	if err != nil {
+		t.Fatalf("字面点名付费应 200，实际 %v", err)
+	}
+	if !contains(string(res.Body), "paid-direct") {
+		t.Errorf("expected literal paid direct, body=%s", res.Body)
+	}
+	if got := atomic.LoadInt32(&paidHits); got != 1 {
+		t.Errorf("paid hits = %d, want 1", got)
+	}
+}

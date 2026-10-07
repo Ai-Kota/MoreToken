@@ -129,6 +129,11 @@ type Router struct {
 	// admission 实测能力准入选表（ADR-004 §四）。可为 nil / 空表 ——
 	// 此时**不做准入过滤**（回退到既有的 kinds 行为），见 filterByAdmission 注释。
 	admission *admission.Table
+
+	// allowPaidFallback T-042：虚拟模型是否允许 fallback 进付费层。
+	// 默认 false（用户定性 2026-10-07："付费兜底是伪命题，免费池自循环兜底"）；
+	// config 显式 allow_paid_fallback=true 才恢复旧行为（回滚闸）。
+	allowPaidFallback bool
 }
 
 // 关于"层门控"（paidOnly / TierGate）为何被删除（2026-09-20，T-015）：
@@ -256,6 +261,10 @@ func New(cfg *config.Config, opts ...Option) *Router {
 	for _, o := range opts {
 		o(r)
 	}
+	// T-042：未配置（nil）= 新政策 false（虚拟模型不进付费层）；显式 true = 回滚旧行为。
+	if cfg.AllowPaidFallback != nil {
+		r.allowPaidFallback = *cfg.AllowPaidFallback
+	}
 	r.providers = make([]orderedProvider, len(cfg.Providers))
 	for i, p := range cfg.Providers {
 		// 未解析的占位 key（env:/vault: 都没取到值）不进池（无凭据 ≠ 一把会 401 的假 key）：
@@ -325,7 +334,7 @@ type FreeExhaustedSink func()
 // 没有"当前处于哪个层"这种状态参与决策——档位是观测指标，不是路由输入。
 // 理由见上面「层门控为何被删除」。
 func (r *Router) Route(ctx context.Context, req RouteRequest) (Result, error) {
-	cands := r.candidates(req.Format, req.WantKind)
+	cands := r.candidates(req.Format, req.WantKind, req.VirtualModel)
 	// 字面模型：若配置里**有 provider 声明**它，就把候选收窄到这些 provider。
 	//
 	// 为什么要收窄（而不是"照旧全试、只在失败时不短路"）：
@@ -474,7 +483,13 @@ func declaringCandidates(cands []orderedProvider, model string) []orderedProvide
 	return out
 }
 
-func (r *Router) candidates(format config.Format, wantKind string) []orderedProvider {
+// candidates 同格式 + tier 分层（free 前、paid 后），格式隔离（I3）。
+//
+// T-042（用户定性 2026-10-07："付费兜底是伪命题，免费池自循环兜底"）：
+// virtualModel=true 且未开 AllowPaidFallback 回滚闸时，**只取免费层**——
+// 日常任务 100% 在免费池内循环切换，免费全挂 = 503 + 等日额度重置（T-040
+// 配套），不烧付费。字面模型路由不受影响：基建工具点名付费档仍可直连。
+func (r *Router) candidates(format config.Format, wantKind string, virtualModel bool) []orderedProvider {
 	free, paid := []orderedProvider{}, []orderedProvider{}
 	for i := range r.providers {
 		op := &r.providers[i]
@@ -489,6 +504,9 @@ func (r *Router) candidates(format config.Format, wantKind string) []orderedProv
 		} else {
 			paid = append(paid, *op)
 		}
+	}
+	if virtualModel && !r.allowPaidFallback {
+		paid = nil
 	}
 	out := make([]orderedProvider, 0, len(free)+len(paid))
 	out = append(out, free...)

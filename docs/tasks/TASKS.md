@@ -56,6 +56,10 @@
 
 | T-041 | A/B 验证 T-039/T-040 的交付效果（退化态实测：旧网关 vs 新网关） | 🔵 | **开工中**。用户指令："验证 moretoken 里的大模型能力是否比之前更高"。方法：三实例同时打——before（9e7ee4e worktree，无 admission/无日账本）、new（HEAD 全开）、new-0ban（隔离 T-040 变量）；auto:reasoning/auto:coding 各 6 题；证据三源：/decisions 路由事实 + 答案留档人判卷 + 状态码/耗时。判读：before 503 而 new 200 且答案对 ⇒ 价值兑现；三者同档 ⇒ 不退化（诚实下限）。纯验证不改代码。详见 docs/tasks/T-041.md |
 
+| T-042 | 付费档退出 auto:* 兜底链（用户定性：免费池自循环兜底，付费只基建点名直连） | 🔵 | **开工中**。用户定性（2026-10-07）："付费大模型兜底是个伪命题，应该是免费大模型循环切换兜底"。撤销 T-039 的付费兜底设计：虚拟模型候选链只取免费层（config `allow_paid_fallback` 指针：未配置=false 新政策、显式 true=回滚旧行为）；字面模型路由不受影响（基建点名 agnes-3.0-flash 仍直达）。免费全挂 = 503 + T-040 日账本等 24:00 重置，不烧付费。详见 docs/tasks/T-042.md |
+
+| T-043 | 免费池内 agnes-3.0-flash（harvest 纳新）是否扣免费 key 计费——查清 + 定策 | 🔵 | **已立项（T-041/T-042 勘误牵出）**。事实链：3.0-flash 被 harvest 收进**免费** agnes provider（config/models.auto.json），auto:* 可合法落到它；但 3.0 定位"付费维护"，free key 直打 3.0 能否真免费**无数据**（今日 429 池未复现该计费路径，pro 系的 `remaining: ＄0.00` 是另一事）。处置选项：a. 查清 agnes 侧计费口径（找官方说明/对照实测）b. 计费不可信则把 3.0 从 models.auto.json 免费清单剔除（kinds 照 T-039 保留在 paid provider）c. 维持现状。详见 docs/tasks/T-041.md「勘误」与 T-042.md「未核实」 |
+
 ## 存量登记说明
 
 - v4.0"会话保持型路由网关"（Phase 1 完成）已归档提交 `15d8f68`，作为设计历史

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed（行为变化，升级须知）
+- **T-042 付费层退出虚拟模型兜底链**（用户定性：免费池自循环兜底）：默认起
+  `auto:*` 不再 fallback 进付费 provider；免费全挂 = 503（reason 含 T-040 的
+  `daily-quota banned` 标注）+ 等 24:00 日额度重置。显式配
+  `"allow_paid_fallback": true` 可恢复"免费挂转付费"旧行为（回滚闸）。
+  字面模型点名付费档不受影响（基建维护用途保留）。
+- T-039 起 `admission_path` 生效后，`auto:reasoning` / `auto:coding` 只在**实测过
+  `admission_min_ratio`（当前 0.8）线**的模型里挑；付费档 `agnes-3.0-flash`
+  补了 reasoning kind（字面直连可用，虚拟模型默认不再消费它）。
+- T-040 新增 429 日账本：某 key 当日 429 ≥ `rate_limit_daily_ban`（未配置=缺省 4；
+  显式 0=回归闸关闭）⇒ 该 key 摘除至当日 24:00。
+
 ### Added
 - Free-first deterministic state machine routing
 - Dual protocol support (OpenAI + Anthropic)
