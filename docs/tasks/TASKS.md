@@ -54,6 +54,8 @@
 
 | T-040 | key 级 429 日账本——当日额度耗尽的 key 摘出（持久化任务地基） | ✅ | **已完成并验证（2026-10-07）**。用户定性："日常任务 100% 压免费池"。今日实测证据：xkiro 27 模型全 429（日额度耗尽）、agnes 换 key 全 429（账号级墙）——60s 短冷却对"今天没了"无意义。交付：`Ledger`（internal/pool/ledger.go）key 当日 429 计数 ≥ N（config `rate_limit_daily_ban`，指针语义：未配置=缺省 4、显式 0=回归闸关）⇒ 摘除至 24:00 自动归零复活；记账点=pool.RecordRateLimit（router.go:574 现有调用处，零新增路径）；全池不可用时 reason 标 `all keys cooled (incl N daily-quota banned)`（不静默）。验证：fake clock 4 单测全绿（含回归闸 0 档）+ 变异检验（停摘除判断 ⇒ TestKeyPool_DailyBan 红）+ 全仓测试/vet/-check 绿。真身证据待明早日额度重置后看 /decisions。不持久化、不做低峰调度（另立）。详见 docs/tasks/T-040.md |
 
+| T-041 | A/B 验证 T-039/T-040 的交付效果（退化态实测：旧网关 vs 新网关） | 🔵 | **开工中**。用户指令："验证 moretoken 里的大模型能力是否比之前更高"。方法：三实例同时打——before（9e7ee4e worktree，无 admission/无日账本）、new（HEAD 全开）、new-0ban（隔离 T-040 变量）；auto:reasoning/auto:coding 各 6 题；证据三源：/decisions 路由事实 + 答案留档人判卷 + 状态码/耗时。判读：before 503 而 new 200 且答案对 ⇒ 价值兑现；三者同档 ⇒ 不退化（诚实下限）。纯验证不改代码。详见 docs/tasks/T-041.md |
+
 ## 存量登记说明
 
 - v4.0"会话保持型路由网关"（Phase 1 完成）已归档提交 `15d8f68`，作为设计历史
