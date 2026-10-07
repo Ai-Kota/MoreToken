@@ -268,12 +268,21 @@ func New(cfg *config.Config, opts ...Option) *Router {
 		pv.Keys = nil
 		r.providers[i] = orderedProvider{
 			pv:         pv,
-			pool:       pool.New(poolKeys(ids), pool.Options{CoolDur: r.coolDur, Now: r.now}),
+			pool:       pool.New(poolKeys(ids), pool.Options{CoolDur: r.coolDur, Now: r.now, DailyBan: dailyBanFromConfig(cfg)}),
 			keyVal:     vals,
 			unresolved: unresolved,
 		}
 	}
 	return r
+}
+
+// dailyBanFromConfig 解析 429 日账本阈值（T-040）：nil（未配置）= 缺省 4；
+// 0 = 关（回归闸，纯 60s 短冷却）；≥1 = 生效。指针语义见 config.RateLimitDailyBan 注释。
+func dailyBanFromConfig(cfg *config.Config) int {
+	if cfg.RateLimitDailyBan == nil {
+		return 4
+	}
+	return *cfg.RateLimitDailyBan
 }
 
 // filterRealKeys 过滤掉未解析的占位 key，只留真实凭据。
@@ -544,10 +553,19 @@ func (r *Router) tryCandidate(ctx context.Context, op *orderedProvider, req Rout
 		for attempt := 0; attempt < keyAttempts; attempt++ {
 			key, ok := op.pool.Select()
 			if !ok {
-				// 全 key 冷却 → 该 provider 不可用，标记池级退避并 fallback 下一候选。
-				// 这是 **key** 的问题，换模型无用。
+				// 全 key 不可用（60s 短冷却 / 当日摘除）→ 该 provider 不可用，
+				// 标记池级退避并 fallback 下一候选。这是 **key** 的问题，换模型无用。
+				//
+				// reason 不静默（T-040）：日账本摘除是新机制——不说出来，
+				// 事后的 "all keys cooled" 会把"额度日墙"读成"分钟级抖动"。
+				reason := "all keys cooled"
+				if l := op.pool.Ledger(); l != nil {
+					if b := l.BannedCount(); b > 0 {
+						reason = fmt.Sprintf("all keys cooled (incl %d daily-quota banned)", b)
+					}
+				}
 				r.markBackoff(op)
-				return provider.Result{}, provider.Fail{Kind: provider.FailUpstream, Reason: "all keys cooled"}, false, m
+				return provider.Result{}, provider.Fail{Kind: provider.FailUpstream, Reason: reason}, false, m
 			}
 			pvReq := provider.Request{
 				Format:   string(op.pv.Format),

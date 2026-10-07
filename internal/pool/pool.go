@@ -41,6 +41,7 @@ type Pool struct {
 	now      func() time.Time // 时钟注入（测试用 fake clock；默认 time.Now）
 	coolDur  time.Duration    // 单次 429 的冷却时长
 	deadDur  time.Duration    // 凭据被拒（401/403）的长禁时长
+	ledger   *Ledger          // key 级 429 日账本（nil = 未启用，纯短冷却现状；T-040）
 }
 
 // Options 构造选项。
@@ -51,6 +52,9 @@ type Options struct {
 	DeadDur time.Duration
 	// Now 时钟注入（默认 time.Now）。测试用 fake clock 精确控制"第 N 分钟"。
 	Now func() time.Time
+	// DailyBan 429 日账本阈值（T-040）：某 key 当日 429 ≥ 该值 ⇒ 摘除至 24:00。
+	// 0 = 关（行为与启用前完全一致，回归闸）。
+	DailyBan int
 }
 
 // New 建池。keys 至少 1 把（config 层已校验；这里防御性处理 0 把 = 空池）。
@@ -70,6 +74,8 @@ func New(keys []Key, opts Options) *Pool {
 		now:      opts.Now,
 		coolDur:  opts.CoolDur,
 		deadDur:  opts.DeadDur,
+		// 日账本与短冷却共享同一注入时钟（测试拨钟过 24:00 两边一致）。
+		ledger: NewLedger(opts.Now, opts.DailyBan),
 	}
 	return p
 }
@@ -77,8 +83,8 @@ func New(keys []Key, opts Options) *Pool {
 // SetClock 替换时钟（测试拨钟入口；生产路径不用）。
 func (p *Pool) SetClock(fn func() time.Time) { p.mu.Lock(); p.now = fn; p.mu.Unlock() }
 
-// Select 选一把当下可用的 key：RoundRobin 跳过冷却中的 key。
-// 返回 key 与是否可用；全池冷却时 ok=false（调用方按 I2 语义落到下一 provider / 付费链）。
+// Select 选一把当下可用的 key：RoundRobin 跳过冷却中 / 当日摘除的 key。
+// 返回 key 与是否可用；全池不可用时 ok=false（调用方按 I2 语义落到下一 provider / 付费链）。
 func (p *Pool) Select() (Key, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -87,32 +93,40 @@ func (p *Pool) Select() (Key, bool) {
 	if n == 0 {
 		return Key{}, false
 	}
-	// 从 rrIndex 起扫一圈，找第一把不在冷却的。
+	// 从 rrIndex 起扫一圈，找第一把既不在冷却、也没被日账本摘除的。
 	for i := 0; i < n; i++ {
 		k := p.keys[(p.rrIndex+i)%n]
 		b, benched := p.cooldown[k.ID]
 		if benched && now.Before(b.until) {
 			continue
 		}
+		if p.ledger != nil && p.ledger.Banned(k.ID) {
+			continue // 当日 429 次数已达阈值 ⇒ 摘除至 24:00（T-040）
+		}
 		// 选中：推进游标（FreeLLMAPI：即使本轮没选上也推进，避免反复撞同一把挂 key）。
 		p.rrIndex = (p.rrIndex + i + 1) % n
 		return k, true
 	}
-	// 全冷却：推进游标避免下次又撞同一把，返回不可用。
+	// 全不可用：推进游标避免下次又撞同一把，返回不可用。
 	p.rrIndex = (p.rrIndex + 1) % n
 	return Key{}, false
 }
 
 // RecordRateLimit 把某 key 打入冷却（429 命中时调用，I8）。
 // 不缩短已有更长的冷却（对齐 FreeLLMAPI "never shorten an existing bench"）。
+// 同步向日账本记一次（T-040）：短冷却挡分钟级的墙，账本挡日级的墙。
 func (p *Pool) RecordRateLimit(keyID string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	until := p.now().Add(p.coolDur)
 	if b, ok := p.cooldown[keyID]; ok && b.until.After(until) {
-		return // 已有更长的冷却，保留
+		// 已有更长的冷却：冷却不动，但**计数仍要记**——
+		// 日账本看的是"今天撞了几次"，与 60s 冷却是否重叠无关。
+		p.ledger.Record(keyID)
+		return
 	}
 	p.cooldown[keyID] = bench{until: until}
+	p.ledger.Record(keyID)
 }
 
 // RecordDead 把某 key 打入**长**禁（凭据被拒：401/403 时调用）。
@@ -171,3 +185,7 @@ func (p *Pool) CooldownCount() int {
 
 // Len 池内 key 总数。
 func (p *Pool) Len() int { p.mu.Lock(); defer p.mu.Unlock(); return len(p.keys) }
+
+// Ledger 返回池的 429 日账本（threshold=0 时 Banned 恒 false，行为同未启用）。
+// 供 /decisions 的 reason 标注"其中 N 把是日摘除"（T-040：全池不可用时不静默）。
+func (p *Pool) Ledger() *Ledger { p.mu.Lock(); defer p.mu.Unlock(); return p.ledger }

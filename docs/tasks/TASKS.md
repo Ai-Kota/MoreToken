@@ -52,6 +52,8 @@
 
 | T-039 | 把实测能力接进路由（admission 表接线 + paid reasoning 兜底） | ✅ | **已完成并验证（宿主形态）**。用户定性："利用好每个免费模型、价值最大化"。交付：① config.json 加 `admission_path`（指向 TEST/model-evaluator/admitted.json，合并 WU-1 实测：2.5-flash coding 3/5→4/5 双 key 独立复现取 max）② paid 两条 agnes-3.0-flash kinds 加 `reasoning`（实测 9/10、reasoning 5/5，消除 T-015 形状"免费全挂时付费兜底接不了 reasoning ⇒ 全线 503"）。验证（2026-10-07 实测）：/doctor `admission={active:true, models:62, reasoning:2, coding:2, min_ratio:0.8}`；`auto:reasoning/coding/general/auto` 全 200；临时停表 → `active:false` 回退 kinds 且 /doctor 不静默。零代码改动。容器挂载跟进与 429 日账本（T-040）另立。详见 docs/tasks/T-039.md |
 
+| T-040 | key 级 429 日账本——当日额度耗尽的 key 摘出（持久化任务地基） | ✅ | **已完成并验证（2026-10-07）**。用户定性："日常任务 100% 压免费池"。今日实测证据：xkiro 27 模型全 429（日额度耗尽）、agnes 换 key 全 429（账号级墙）——60s 短冷却对"今天没了"无意义。交付：`Ledger`（internal/pool/ledger.go）key 当日 429 计数 ≥ N（config `rate_limit_daily_ban`，指针语义：未配置=缺省 4、显式 0=回归闸关）⇒ 摘除至 24:00 自动归零复活；记账点=pool.RecordRateLimit（router.go:574 现有调用处，零新增路径）；全池不可用时 reason 标 `all keys cooled (incl N daily-quota banned)`（不静默）。验证：fake clock 4 单测全绿（含回归闸 0 档）+ 变异检验（停摘除判断 ⇒ TestKeyPool_DailyBan 红）+ 全仓测试/vet/-check 绿。真身证据待明早日额度重置后看 /decisions。不持久化、不做低峰调度（另立）。详见 docs/tasks/T-040.md |
+
 ## 存量登记说明
 
 - v4.0"会话保持型路由网关"（Phase 1 完成）已归档提交 `15d8f68`，作为设计历史
