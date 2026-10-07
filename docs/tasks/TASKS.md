@@ -60,9 +60,7 @@
 
 | T-043 | 免费池内 agnes-3.0-flash（harvest 纳新）是否扣免费 key 计费——查清 + 定策 | 🔵 | **已立项（T-041/T-042 勘误牵出）**。事实链：3.0-flash 被 harvest 收进**免费** agnes provider（config/models.auto.json），auto:* 可合法落到它；但 3.0 定位"付费维护"，free key 直打 3.0 能否真免费**无数据**（今日 429 池未复现该计费路径，pro 系的 `remaining: ＄0.00` 是另一事）。处置选项：a. 查清 agnes 侧计费口径（找官方说明/对照实测）b. 计费不可信则把 3.0 从 models.auto.json 免费清单剔除（kinds 照 T-039 保留在 paid provider）c. 维持现状。详见 docs/tasks/T-041.md「勘误」与 T-042.md「未核实」 |
 
-| T-044 | 虚拟模型输出预算下限——推理型请求不再被小 max_tokens 测成残废 | 🔵 | **已立项（T-041 追加二，有数据）**。实测：主力 2.5-flash 是推理型，客户端默认 32–128 预算 ⇒ 思考吃光、正文恒空（难题 7/8 "答不出"）；预算给 4096 后同题 6/8 对——**同模型纯预算差异**。交付：config `min_output_tokens`（未配置=缺省 4096、显式 0=回归闸关）+ 虚拟模型请求 max_tokens 缺失/低于下限 ⇒ 抬到 min(下限, 模型已声明 max_output_tokens)，**只抬不降**；字面模型不动；抬了就在 /decisions 标 `budget_raised`（不静默）。详见 docs/tasks/T-044.md |
-
-| T-043 | 免费池内 agnes-3.0-flash（harvest 纳新）是否扣免费 key 计费——查清 + 定策 | 🔵 | **已立项（T-041/T-042 勘误牵出）**。事实链：3.0-flash 被 harvest 收进**免费** agnes provider（config/models.auto.json），auto:* 可合法落到它；但 3.0 定位"付费维护"，free key 直打 3.0 能否真免费**无数据**（今日 429 池未复现该计费路径，pro 系的 `remaining: ＄0.00` 是另一事）。处置选项：a. 查清 agnes 侧计费口径（找官方说明/对照实测）b. 计费不可信则把 3.0 从 models.auto.json 免费清单剔除（kinds 照 T-039 保留在 paid provider）c. 维持现状。详见 docs/tasks/T-041.md「勘误」与 T-042.md「未核实」 |
+| T-044 | 虚拟模型输出预算下限——推理型请求不再被小 max_tokens 测成残废 | ✅ | **完成并提交（`556cde6`，2026-10-08）**。实测驱动（T-041 追加二）：主力 2.5-flash 是推理型，客户端默认 32–128 预算 ⇒ 思考吃光、正文恒空（难题 7/8 "答不出"）；4096 预算同题 6/8 对——**同模型纯预算差异**。交付：config `min_output_tokens`（未配置=缺省 4096 实测够用线、显式 0=回归闸关、≥1 生效）+ 虚拟模型请求 max_tokens 缺失/低于下限 ⇒ 抬到 min(下限, 模型已声明 max_output_tokens)，**只抬不降**；字面模型一个字节不动；抬了就在 /decisions reason 标 `budget_raised <old>→<new>`（不静默，T-020 纪律）。验证：7 条单测（含 0 回归闸 + 模型上限封顶 1024 + 缺省补字段）全绿 + 变异检验（摘除抬预算判断 ⇒ 2 条红）+ 上线实打 `auto:reasoning`+max_tokens=64 ⇒ /decisions 现 `budget_raised 64→4096`。详见 docs/tasks/T-044.md |
 
 ## 存量登记说明
 
