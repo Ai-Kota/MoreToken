@@ -111,6 +111,11 @@ type Result struct {
 	// Attempts 逐个候选的失败留痕，按尝试顺序。**失败路径才有**（成功路径为空）。
 	// Route 在返回 error 时也会带上它，调用方据此留痕。
 	Attempts []Attempt `json:"attempts,omitempty"`
+
+	// BudgetRaised T-044：网关抬过 max_tokens（虚拟模型 + 客户端预算低于下限）时
+	// 置位，值 = "budget_raised <old>→<new>"。改过请求体必须是**可审计事件**
+	// （T-020 同款纪律）：proxy 把它并入 /decisions 的 reason。
+	BudgetRaised string `json:"budget_raised,omitempty"`
 }
 
 // Router 持有全部 provider 的池与退避冷却，线程安全（可被多请求共享）。
@@ -134,6 +139,10 @@ type Router struct {
 	// 默认 false（用户定性 2026-10-07："付费兜底是伪命题，免费池自循环兜底"）；
 	// config 显式 allow_paid_fallback=true 才恢复旧行为（回滚闸）。
 	allowPaidFallback bool
+
+	// minOutTok T-044：虚拟模型请求的输出预算下限（0 = 关，完全尊重客户端原值）。
+	// 未配置（nil）= 缺省 4096；显式 0 = 关；≥1 = 生效。语义见 config.MinOutputTokens。
+	minOutTok int
 }
 
 // 关于"层门控"（paidOnly / TierGate）为何被删除（2026-09-20，T-015）：
@@ -265,6 +274,15 @@ func New(cfg *config.Config, opts ...Option) *Router {
 	if cfg.AllowPaidFallback != nil {
 		r.allowPaidFallback = *cfg.AllowPaidFallback
 	}
+	// T-044：未配置（nil）= 缺省 4096（实测"够用线"）；显式 0 = 关（回归闸）。
+	switch {
+	case cfg.MinOutputTokens == nil:
+		r.minOutTok = 4096
+	case *cfg.MinOutputTokens == 0:
+		r.minOutTok = 0
+	default:
+		r.minOutTok = *cfg.MinOutputTokens
+	}
 	r.providers = make([]orderedProvider, len(cfg.Providers))
 	for i, p := range cfg.Providers {
 		// 未解析的占位 key（env:/vault: 都没取到值）不进池（无凭据 ≠ 一把会 401 的假 key）：
@@ -379,7 +397,7 @@ func (r *Router) Route(ctx context.Context, req RouteRequest) (Result, error) {
 			freeAttempted++
 		}
 		t0 := r.now()
-		res, fail, done, model := r.tryCandidate(ctx, op, req)
+		res, fail, done, model, budgetNote := r.tryCandidate(ctx, op, req)
 		elapsed := r.now().Sub(t0)
 		if done {
 			return Result{
@@ -388,6 +406,7 @@ func (r *Router) Route(ctx context.Context, req RouteRequest) (Result, error) {
 				ProviderID: op.pv.ID,
 				Retried:    hops > 0,
 				Model:      model,
+				BudgetRaised: budgetNote,
 			}, nil
 		}
 		if fail.Kind == provider.FailContextTooLong {
@@ -519,7 +538,9 @@ func (r *Router) candidates(format config.Format, wantKind string, virtualModel 
 // 401/403 不在此列：那是 key 的问题不是请求的问题，换池内下一把，不惊动 provider 级 fallback。
 //
 // 第四个返回值是该候选实际使用的模型（虚拟模型解析结果；字面模型时为空）。
-func (r *Router) tryCandidate(ctx context.Context, op *orderedProvider, req RouteRequest) (provider.Result, provider.Fail, bool, string) {
+// 第五个返回值是 T-044 的预算说明（抬过 max_tokens 时非空，形如
+// "budget_raised 64→4096"；否则为空）——供 Route 并入 /decisions。
+func (r *Router) tryCandidate(ctx context.Context, op *orderedProvider, req RouteRequest) (provider.Result, provider.Fail, bool, string, string) {
 	// 模型候选：字面模型只有一条（body 原样不动）；虚拟模型取该 provider 持有的**全部**
 	// 匹配模型，按偏好顺序。
 	//
@@ -541,18 +562,22 @@ func (r *Router) tryCandidate(ctx context.Context, op *orderedProvider, req Rout
 			return provider.Result{}, provider.Fail{
 				Kind:   provider.FailUpstream,
 				Reason: fmt.Sprintf("provider %s has no model of kind %q", op.pv.ID, req.WantKind),
-			}, false, ""
+			}, false, "", ""
 		}
 	}
 
 	// 同一个 provider 内最多试几个模型：上游整体故障时，别把整张目录都打一遍
 	// （免费额度按账号限流，一次请求烧 20 个模型比失败更糟）。
+	// lastBudgetNote 跨模型轮换保留：抬预算发生在"选定某模型时"，即便该模型后续
+	// 模型轮换用尽，已发生过的抬预算仍要上抛（可审计）。
 	const maxModels = 3
+	lastBudgetNote := ""
 	for mi, m := range models {
 		if mi >= maxModels {
 			break
 		}
 		body := req.Body
+		budgetNote := ""
 		if req.VirtualModel {
 			rewritten, err := SetModel(req.Body, m)
 			if err != nil {
@@ -560,9 +585,23 @@ func (r *Router) tryCandidate(ctx context.Context, op *orderedProvider, req Rout
 				// 指向错误方向的 "model not found"）。
 				return provider.Result{}, provider.Fail{
 					Kind: provider.FailUpstream, Reason: err.Error(),
-				}, false, ""
+				}, false, "", ""
 			}
 			body = rewritten
+			// T-044：虚拟模型托底输出预算——推理型模型的思考链会把小 max_tokens
+			// 吃光、正文恒空（T-041 追加二实测）。抬预算有副作用（改变上游生成
+			// 量），所以必须可审计：抬了就回报预算说明，最终并入 /decisions。
+			// 只抬不降；有模型声明的输出上限时封顶，不造超限请求。
+			if r.minOutTok > 0 {
+				floor := r.minOutTok
+				if cap := OutputCap(op.pv, m); cap > 0 && cap < floor {
+					floor = cap
+				}
+				if newBody, raised, old, new := EnsureOutputBudget(body, floor, 0); raised {
+					body = newBody
+					budgetNote = fmt.Sprintf("budget_raised %d→%d", old, new)
+				}
+			}
 		}
 
 		// keyAttempts：同一 model 下最多试几把 key。默认 3；FailDenied（403）
@@ -583,7 +622,7 @@ func (r *Router) tryCandidate(ctx context.Context, op *orderedProvider, req Rout
 					}
 				}
 				r.markBackoff(op)
-				return provider.Result{}, provider.Fail{Kind: provider.FailUpstream, Reason: reason}, false, m
+				return provider.Result{}, provider.Fail{Kind: provider.FailUpstream, Reason: reason}, false, m, budgetNote
 			}
 			pvReq := provider.Request{
 				Format:   string(op.pv.Format),
@@ -605,7 +644,7 @@ func (r *Router) tryCandidate(ctx context.Context, op *orderedProvider, req Rout
 					// 也别整层 fallback 到别的 provider（那会白白绕开一个还能用的服务商）。
 					break
 				}
-				return res, fail, true, m
+				return res, fail, true, m, budgetNote
 			}
 			if fail.Kind == provider.FailRateLimit {
 				op.pool.RecordRateLimit(key.ID) // key 级 429 冷却（I8），换下一把
@@ -618,15 +657,15 @@ func (r *Router) tryCandidate(ctx context.Context, op *orderedProvider, req Rout
 				continue
 			}
 			if fail.Kind == provider.FailStreamMid {
-				return res, fail, true, m // 流中断不重放（I7）
+				return res, fail, true, m, budgetNote // 流中断不重放（I7）
 			}
 			if fail.Kind == provider.FailTransport {
 				// 连接层失败：是 provider（或本机网络）的事实，与具体模型无关 → 不换模型。
-				return res, fail, false, m
+				return res, fail, false, m, budgetNote
 			}
 			if fail.Kind == provider.FailContextTooLong {
 				// 上下文是**请求**的属性：换模型/换 key 都是同一个答案，直接上抛。
-				return res, fail, false, m
+				return res, fail, false, m, budgetNote
 			}
 			if fail.Kind == provider.FailDenied {
 				// **403 是 key 级事实**（T-035，2026-10-05 受控实验实测）。
@@ -663,12 +702,13 @@ func (r *Router) tryCandidate(ctx context.Context, op *orderedProvider, req Rout
 			if mi+1 < len(models) {
 				break
 			}
-			return res, fail, false, m
+			return res, fail, false, m, budgetNote
 		}
 		// 走到这里 = 该模型被上游拒（404/5xx）且还有下一个模型，或该模型 key 轮换用尽。
+		lastBudgetNote = budgetNote
 	}
 	return provider.Result{}, provider.Fail{
-		Kind: provider.FailUpstream, Reason: "model rotation exhausted"}, false, models[0]
+		Kind: provider.FailUpstream, Reason: "model rotation exhausted"}, false, models[0], lastBudgetNote
 }
 
 // 退避字段的并发保护：op 指针共享，经 Router.mu 收敛。

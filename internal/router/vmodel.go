@@ -124,3 +124,55 @@ func ResolveModel(p config.Provider, kind string) (string, bool) {
 	}
 	return ms[0], true
 }
+
+// OutputCap 该 provider 下指定模型的输出上限（max_output_tokens，0 = 未声明）。
+// 供 T-044 抬预算时封顶——不造出超过模型声明上限的请求。
+func OutputCap(p config.Provider, modelID string) int {
+	for _, m := range p.Models {
+		if m.ID == modelID {
+			return m.MaxOutputTokens
+		}
+	}
+	return 0
+}
+
+// EnsureOutputBudget 托底虚拟模型请求的输出预算（T-044）：
+// max_tokens 缺失或低于 floor 时抬到 floor；cap>0（该模型声明的输出上限）时
+// 封顶到 min(floor, cap)——不造出超限请求。**只抬不降**：客户端给的值 ≥ 目标
+// 时原样不动。
+//
+// 返回 (新 body, 是否抬了, 抬前值, 抬后值)。抬前 0 = 原请求未带 max_tokens。
+// floor<=0（关）或 body 非 JSON 对象时原样返回（raised=false）。
+// openai 与 anthropic 的键名都是 max_tokens，一处改写。
+func EnsureOutputBudget(body []byte, floor, capTok int) ([]byte, bool, int, int) {
+	if floor <= 0 {
+		return body, false, 0, 0
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil {
+		return body, false, 0, 0
+	}
+	var cur int
+	if raw, ok := fields["max_tokens"]; ok {
+		if json.Unmarshal(raw, &cur) != nil {
+			cur = 0
+		}
+	}
+	target := floor
+	if capTok > 0 && capTok < target {
+		target = capTok
+	}
+	if cur >= target {
+		return body, false, cur, cur
+	}
+	encoded, err := json.Marshal(target)
+	if err != nil {
+		return body, false, cur, cur
+	}
+	fields["max_tokens"] = encoded
+	out, err := json.Marshal(fields)
+	if err != nil {
+		return body, false, cur, cur
+	}
+	return out, true, cur, target
+}

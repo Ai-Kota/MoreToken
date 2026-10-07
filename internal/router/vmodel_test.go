@@ -119,6 +119,192 @@ func captureRouter(t *testing.T, provs []config.Provider) (*Router, *[]string, *
 	return New(&config.Config{Providers: provs}, WithClient(http.DefaultClient)), &models, &mu
 }
 
+// captureBudgetRouter 建一个会同时记录收到 model 与 max_tokens 的 fake 上游。
+// cfgMin 为 config.MinOutputTokens（nil = 缺省 4096；0 = 关）。
+func captureBudgetRouter(t *testing.T, provs []config.Provider, cfgMin *int) (*Router, *[]int, *sync.Mutex) {
+	t.Helper()
+	var mu sync.Mutex
+	var budgets []int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var probe struct {
+			MaxTokens int `json:"max_tokens"`
+		}
+		buf := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(buf)
+		_ = json.Unmarshal(buf, &probe)
+		mu.Lock()
+		budgets = append(budgets, probe.MaxTokens)
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"ok":true}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	for i := range provs {
+		provs[i].BaseURL = srv.URL + "/v1"
+	}
+	cfg := &config.Config{Providers: provs, MinOutputTokens: cfgMin}
+	return New(cfg, WithClient(http.DefaultClient)), &budgets, &mu
+}
+
+// TestRoute_VirtualModel_BudgetRaised 虚拟模型 + 客户端小预算 ⇒ 被抬到 4096（缺省），
+// 且 Result.BudgetRaised 留痕（/decisions 可见）。
+func TestRoute_VirtualModel_BudgetRaised(t *testing.T) {
+	provs := []config.Provider{{
+		ID: "p", Format: config.FormatOpenAI, Tier: config.TierFree,
+		Keys:   []string{"sk-1"},
+		Models: []config.Model{{ID: "brainy", Kinds: []string{"reasoning"}}},
+	}}
+	r, budgets, mu := captureBudgetRouter(t, provs, nil) // nil = 缺省 4096
+
+	res, err := r.Route(context.Background(), RouteRequest{
+		Format: config.FormatOpenAI, Body: []byte(`{"model":"auto:reasoning","max_tokens":64,"messages":[]}`),
+		Kind: provider.NonStreaming, VirtualModel: true, WantKind: "reasoning",
+	})
+	if err != nil {
+		t.Fatalf("Route: %v", err)
+	}
+	if res.BudgetRaised == "" {
+		t.Errorf("BudgetRaised 空，want budget_raised 64→4096")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(*budgets) != 1 || (*budgets)[0] != 4096 {
+		t.Errorf("上游收到 max_tokens = %v, want [4096]", *budgets)
+	}
+}
+
+// TestRoute_VirtualModel_BudgetNotLowered 客户端给的大预算（≥ 下限）不被压低。
+func TestRoute_VirtualModel_BudgetNotLowered(t *testing.T) {
+	provs := []config.Provider{{
+		ID: "p", Format: config.FormatOpenAI, Tier: config.TierFree,
+		Keys:   []string{"sk-1"},
+		Models: []config.Model{{ID: "brainy", Kinds: []string{"reasoning"}}},
+	}}
+	r, budgets, mu := captureBudgetRouter(t, provs, nil)
+
+	_, err := r.Route(context.Background(), RouteRequest{
+		Format: config.FormatOpenAI, Body: []byte(`{"model":"auto:reasoning","max_tokens":8192,"messages":[]}`),
+		Kind: provider.NonStreaming, VirtualModel: true, WantKind: "reasoning",
+	})
+	if err != nil {
+		t.Fatalf("Route: %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(*budgets) != 1 || (*budgets)[0] != 8192 {
+		t.Errorf("上游收到 max_tokens = %v, want [8192]（只抬不降）", *budgets)
+	}
+}
+
+// TestRoute_LiteralModel_BudgetUntouched 字面模型（基建点名）max_tokens 一个字节不动
+// —— 即便值低于缺省下限（回归闸：托底只作用于"网关替你挑"的池）。
+func TestRoute_LiteralModel_BudgetUntouched(t *testing.T) {
+	provs := []config.Provider{{
+		ID: "p", Format: config.FormatOpenAI, Tier: config.TierFree,
+		Keys:   []string{"sk-1"},
+		Models: []config.Model{{ID: "agnes-2.5-flash", Kinds: []string{"reasoning"}}},
+	}}
+	r, budgets, mu := captureBudgetRouter(t, provs, nil)
+
+	_, err := r.Route(context.Background(), RouteRequest{
+		Format: config.FormatOpenAI, Body: []byte(`{"model":"agnes-2.5-flash","max_tokens":64,"messages":[]}`),
+		Kind: provider.NonStreaming, // 非虚拟
+	})
+	if err != nil {
+		t.Fatalf("Route: %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(*budgets) != 1 || (*budgets)[0] != 64 {
+		t.Errorf("字面模型上游收到 max_tokens = %v, want [64]（字面不托底）", *budgets)
+	}
+}
+
+// TestRoute_VirtualModel_BudgetOff MinOutputTokens=0（显式关）⇒ 完全尊重客户端原值。
+func TestRoute_VirtualModel_BudgetOff(t *testing.T) {
+	provs := []config.Provider{{
+		ID: "p", Format: config.FormatOpenAI, Tier: config.TierFree,
+		Keys:   []string{"sk-1"},
+		Models: []config.Model{{ID: "brainy", Kinds: []string{"reasoning"}}},
+	}}
+	off := 0
+	r, budgets, mu := captureBudgetRouter(t, provs, &off)
+
+	_, err := r.Route(context.Background(), RouteRequest{
+		Format: config.FormatOpenAI, Body: []byte(`{"model":"auto:reasoning","max_tokens":64,"messages":[]}`),
+		Kind: provider.NonStreaming, VirtualModel: true, WantKind: "reasoning",
+	})
+	if err != nil {
+		t.Fatalf("Route: %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(*budgets) != 1 || (*budgets)[0] != 64 {
+		t.Errorf("关闸后上游收到 max_tokens = %v, want [64]（0=完全尊重原值）", *budgets)
+	}
+}
+
+// TestRoute_VirtualModel_BudgetCappedByModelCap 模型声明了更小的输出上限时，
+// 抬预算封顶到该上限（不造出超过模型上限的请求）。
+func TestRoute_VirtualModel_BudgetCappedByModelCap(t *testing.T) {
+	provs := []config.Provider{{
+		ID: "p", Format: config.FormatOpenAI, Tier: config.TierFree,
+		Keys:   []string{"sk-1"},
+		Models: []config.Model{{ID: "brainy", Kinds: []string{"reasoning"}, MaxOutputTokens: 1024}},
+	}}
+	r, budgets, mu := captureBudgetRouter(t, provs, nil)
+
+	_, err := r.Route(context.Background(), RouteRequest{
+		Format: config.FormatOpenAI, Body: []byte(`{"model":"auto:reasoning","max_tokens":64,"messages":[]}`),
+		Kind: provider.NonStreaming, VirtualModel: true, WantKind: "reasoning",
+	})
+	if err != nil {
+		t.Fatalf("Route: %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(*budgets) != 1 || (*budgets)[0] != 1024 {
+		t.Errorf("封顶后上游收到 max_tokens = %v, want [1024]（模型上限 1024 < 缺省 4096）", *budgets)
+	}
+}
+
+// TestEnsureOutputBudget_Regression Gate 缺失（floor<=0）时 EnsureOutputBudget 完全不动 body。
+func TestEnsureOutputBudget_RegressionGate(t *testing.T) {
+	body := []byte(`{"model":"auto","max_tokens":64,"messages":[]}`)
+	out, raised, _, _ := EnsureOutputBudget(body, 0, 0)
+	if raised {
+		t.Error("floor=0 时不应抬预算（回归闸）")
+	}
+	if string(out) != string(body) {
+		t.Errorf("body 被改了：%s", out)
+	}
+}
+
+// TestRoute_VirtualModel_BudgetMissingField 请求体完全没带 max_tokens（openai 可选）
+// ⇒ 缺省补 4096；anthropic 格式该字段必填，网关替调用方兜住默认值而非报错。
+func TestRoute_VirtualModel_BudgetMissingField(t *testing.T) {
+	provs := []config.Provider{{
+		ID: "p", Format: config.FormatAnthropic, Tier: config.TierFree,
+		Keys:   []string{"sk-1"},
+		Models: []config.Model{{ID: "brainy", Kinds: []string{"reasoning"}}},
+	}}
+	r, budgets, mu := captureBudgetRouter(t, provs, nil)
+
+	_, err := r.Route(context.Background(), RouteRequest{
+		Format: config.FormatAnthropic, Body: []byte(`{"model":"auto:reasoning","messages":[]}`),
+		Kind: provider.NonStreaming, VirtualModel: true, WantKind: "reasoning",
+	})
+	if err != nil {
+		t.Fatalf("Route: %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(*budgets) != 1 || (*budgets)[0] != 4096 {
+		t.Errorf("缺 max_tokens 时上游收到 = %v, want [4096]（网关兜住默认）", *budgets)
+	}
+}
+
 // TestRoute_VirtualModel_RewritesToConcrete 虚拟模型 → 落成具体模型名再发上游。
 func TestRoute_VirtualModel_RewritesToConcrete(t *testing.T) {
 	r, models, mu := captureRouter(t, []config.Provider{{

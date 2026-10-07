@@ -543,6 +543,15 @@ func routerEntry(res router.Result) DecisionEntry {
 	if reason == "" && res.StatusCode >= 400 && len(res.Body) > 0 {
 		reason = "upstream: " + truncateForLog(res.Body, 300)
 	}
+	// T-044：网关抬过 max_tokens 时把预算说明并入 reason（可审计，不静默）——
+	// 成功路径的 /decisions 本来 reason 恒空，这是唯一让"改过请求体"可见的地方。
+	if res.BudgetRaised != "" {
+		if reason == "" {
+			reason = res.BudgetRaised
+		} else {
+			reason += "; " + res.BudgetRaised
+		}
+	}
 	return DecisionEntry{
 		ProviderID: res.ProviderID,
 		Retried:    res.Retried,
