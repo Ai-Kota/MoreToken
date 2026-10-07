@@ -322,6 +322,7 @@
           "id": "agnes-3.0-flash",
           "name": "Agnes 3.0 Flash (paid)",
           "kinds": [
+            "reasoning",
             "coding",
             "general"
           ],
@@ -343,6 +344,7 @@
           "id": "agnes-3.0-flash",
           "name": "Agnes 3.0 Flash (paid)",
           "kinds": [
+            "reasoning",
             "coding",
             "general"
           ],
@@ -351,5 +353,6 @@
       ]
     }
   ],
-  "admission_min_ratio": 0.8
+  "admission_min_ratio": 0.8,
+  "admission_path": "E:\\AImlyForge\\TEST\\model-evaluator\\admitted.json"
 }

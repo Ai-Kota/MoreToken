@@ -50,6 +50,8 @@
 
 | T-038 | 归档 2026-10-05 供给加固（事故档 + 索引） | ✅ | **已完成**。用户指令"总结一下前面的内容，保存到项目合适的位置"。交付 docs/incidents/2026-10-05-autoreasoning-leak-and-supply.md（按 09-20 体例把 T-031..T-037 收成一篇）。 |
 
+| T-039 | 把实测能力接进路由（admission 表接线 + paid reasoning 兜底） | ✅ | **已完成并验证（宿主形态）**。用户定性："利用好每个免费模型、价值最大化"。交付：① config.json 加 `admission_path`（指向 TEST/model-evaluator/admitted.json，合并 WU-1 实测：2.5-flash coding 3/5→4/5 双 key 独立复现取 max）② paid 两条 agnes-3.0-flash kinds 加 `reasoning`（实测 9/10、reasoning 5/5，消除 T-015 形状"免费全挂时付费兜底接不了 reasoning ⇒ 全线 503"）。验证（2026-10-07 实测）：/doctor `admission={active:true, models:62, reasoning:2, coding:2, min_ratio:0.8}`；`auto:reasoning/coding/general/auto` 全 200；临时停表 → `active:false` 回退 kinds 且 /doctor 不静默。零代码改动。容器挂载跟进与 429 日账本（T-040）另立。详见 docs/tasks/T-039.md |
+
 ## 存量登记说明
 
 - v4.0"会话保持型路由网关"（Phase 1 完成）已归档提交 `15d8f68`，作为设计历史
