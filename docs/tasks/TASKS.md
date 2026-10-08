@@ -62,6 +62,8 @@
 
 | T-044 | 虚拟模型输出预算下限——推理型请求不再被小 max_tokens 测成残废 | ✅ | **完成并提交（`556cde6`，2026-10-08）**。实测驱动（T-041 追加二）：主力 2.5-flash 是推理型，客户端默认 32–128 预算 ⇒ 思考吃光、正文恒空（难题 7/8 "答不出"）；4096 预算同题 6/8 对——**同模型纯预算差异**。交付：config `min_output_tokens`（未配置=缺省 4096 实测够用线、显式 0=回归闸关、≥1 生效）+ 虚拟模型请求 max_tokens 缺失/低于下限 ⇒ 抬到 min(下限, 模型已声明 max_output_tokens)，**只抬不降**；字面模型一个字节不动；抬了就在 /decisions reason 标 `budget_raised <old>→<new>`（不静默，T-020 纪律）。验证：7 条单测（含 0 回归闸 + 模型上限封顶 1024 + 缺省补字段）全绿 + 变异检验（摘除抬预算判断 ⇒ 2 条红）+ 上线实打 `auto:reasoning`+max_tokens=64 ⇒ /decisions 现 `budget_raised 64→4096`。详见 docs/tasks/T-044.md |
 
+| T-045 | 容器形态启用 admission 表挂载（T-039 容器跟进） | 🔵 | **开工中**。前置：T-039 宿主形态接了 admission_path，但生产容器（13h 旧镜像）`/doctor admission.active=false`——容器里 `E:\` 盘不可见，挂载源文件一直缺（compose 注释已备好三步）。交付：① 拷 TEST/model-evaluator/admitted.json → docker/runtime/admitted.json ② 解开 compose 挂载注释（ro）③ config admission_path 改容器内 `/run/admission/admitted.json`。判据：`mt-deploy.sh` 全 PASS 后 **`/doctor admission.active==true`**（唯一真判据）。取舍：纯宿主形态会 fail-open 回退 kinds。详见 docs/tasks/T-045.md |
+
 ## 存量登记说明
 
 - v4.0"会话保持型路由网关"（Phase 1 完成）已归档提交 `15d8f68`，作为设计历史

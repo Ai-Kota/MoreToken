@@ -354,5 +354,5 @@
     }
   ],
   "admission_min_ratio": 0.8,
-  "admission_path": "E:\\AImlyForge\\TEST\\model-evaluator\\admitted.json"
+  "admission_path": "/run/admission/admitted.json"
 }
