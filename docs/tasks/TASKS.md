@@ -64,6 +64,8 @@
 
 | T-045 | 容器形态启用 admission 表挂载（T-039 容器跟进） | 🔵 | **开工中**。前置：T-039 宿主形态接了 admission_path，但生产容器（13h 旧镜像）`/doctor admission.active=false`——容器里 `E:\` 盘不可见，挂载源文件一直缺（compose 注释已备好三步）。交付：① 拷 TEST/model-evaluator/admitted.json → docker/runtime/admitted.json ② 解开 compose 挂载注释（ro）③ config admission_path 改容器内 `/run/admission/admitted.json`。判据：`mt-deploy.sh` 全 PASS 后 **`/doctor admission.active==true`**（唯一真判据）。取舍：纯宿主形态会 fail-open 回退 kinds。详见 docs/tasks/T-045.md |
 
+| T-046 | 评测器定时管线修复——直连源 + 有效行同步容器 + 外部定时器（评测器不归网关做） | ✅ | **完成并验证（2026-10-08 全链路实跑）**。用户拍板"按推荐方式执行"：外部定时器拥有评测器、网关只做消费者（容器/宿主隔离 + 避免自证循环 + 额度不互污）。现状：旧 watch 任务打 127.0.0.1:3002/8899 旧源空转（admitted:109 假绿）。交付：① sources.direct.json（今日探针同款，实出 10/10）② 主同步器 ops/dev-fleet/sync-admission.ps1（原生 PS，修 5.1 BOM 陷阱用 UTF8Encoding($false)；bash 版留手动工具）③ admission-watch.cmd ④ admission-watch-setup.ps1（每 30min，wscript+hidden-run.vbs 隐藏先例，CIM 注册 + 无限重复去 RepetitionDuration 怪癖）。验收：手动跑通 + 计划任务 12:13 自然轮 LastTaskResult=0 + 容器 /doctor admission.active=true（30s 热加载零重启）+ 旧任务已 Disabled（可逆）。纯宿主侧，不碰网关代码/容器。详见 docs/tasks/T-046.md |
+
 ## 存量登记说明
 
 - v4.0"会话保持型路由网关"（Phase 1 完成）已归档提交 `15d8f68`，作为设计历史
