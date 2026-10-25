@@ -9,10 +9,10 @@
 
 | 字段 | 值 |
 |------|------|
-| **会话日期** | 2026-10-25 20:16:42 |
-| **执行任务** | T-049 实施并部署：internal/admission 按模型×维度 best-of-window(3h) 合并；宿主管线迁到 moretoken 自有 scripts/admission-watch.cmd + MoreToken-AdmissionSync(30min, wait=True)；旧 AImlyForge-AdmissionSyncWatch 已禁用；go test 全绿、mt-deploy 15 PASS；运行时反证：3/5 表下 /doctor coding 仍=4；首轮被中止并修复“负退出码仍拷旧产物”bug；目标表已恢复（10700 bytes, agnes coding 4/5）。待 19:13 首轮端到端核销 |
+| **会话日期** | 2026-10-25 20:17:44 |
+| **执行任务** | T-049 端到端验证完成：19:13/19:43 定时轮 watch exit=1 + round done，admitted.json 19:51 更新（5289B, agnes coding 4/5）；20:13 轮运行中；旧 dev-fleet 任务禁用，新 MoreToken-AdmissionSync(wait=True) 正常。待 24h 看 coding_supply 的 admission_empty |
 | **完成状态** | 🔄 进行中 |
-| **会话摘要** | T-049 实施并部署：internal/admission 按模型×维度 best-of-window(3h) 合并；宿主管线迁到 moretoken 自有 scripts/admission-watch.cmd + MoreToken-AdmissionSync(30min, wait=True)；旧 AImlyForge-AdmissionSyncWatch 已禁用；go test 全绿、mt-deploy 15 PASS；运行时反证：3/5 表下 /doctor coding 仍=4；首轮被中止并修复“负退出码仍拷旧产物”bug；目标表已恢复（10700 bytes, agnes coding 4/5）。待 19:13 首轮端到端核销 |
+| **会话摘要** | T-049 端到端验证完成：19:13/19:43 定时轮 watch exit=1 + round done，admitted.json 19:51 更新（5289B, agnes coding 4/5）；20:13 轮运行中；旧 dev-fleet 任务禁用，新 MoreToken-AdmissionSync(wait=True) 正常。待 24h 看 coding_supply 的 admission_empty |
 
 ---
 
@@ -24,11 +24,14 @@
 
 | 任务ID | 进度 | 停在哪里 | 下一步 |
 |:------:|:----:|---------|--------|
-| T-049 实施并部署：internal/admission 按模型×维度 best-of-window(3h) 合并；宿主管线迁到 moretoken 自有 scripts/admission-watch.cmd + MoreToken-AdmissionSync(30min, wait=True)；旧 AImlyForge-AdmissionSyncWatch 已禁用；go test 全绿、mt-deploy 15 PASS；运行时反证：3/5 表下 /doctor coding 仍=4；首轮被中止并修复“负退出码仍拷旧产物”bug；目标表已恢复（10700 bytes, agnes coding 4/5）。待 19:13 首轮端到端核销 | 🔄 | 上次会话中断 | 19:13 后查 docker/runtime/admission-sync.log 的 round done + target mtime；24h 看 mt-report.py 的 coding_supply admission_empty；若 coding 仍有实际失败再补第二 provider |
+| T-049 端到端验证完成：19:13/19:43 定时轮 watch exit=1 + round done，admitted.json 19:51 更新（5289B, agnes coding 4/5）；20:13 轮运行中；旧 dev-fleet 任务禁用，新 MoreToken-AdmissionSync(wait=True) 正常。待 24h 看 coding_supply 的 admission_empty | 🔄 | 上次会话中断 | 24h 后运行 python scripts/mt-report.py --days 1，检查 coding_supply.admission_empty；若 coding 仍有实际失败再补第二 provider |
 
 ### 未完成的修改
 
-| 无变更文件 | — | — |
+| 文件 | 修改内容 | 是否已提交 |
+|------|---------|:---------:|
+| docs/tasks/T-049.md | （待确认） | ⬜ |
+| docs/tasks/TASKS.md | （待确认） | ⬜ |
 
 ### 待决策项
 
@@ -52,7 +55,7 @@
 
 ### 项目当前状态
 
-T-049 实施并部署：internal/admission 按模型×维度 best-of-window(3h) 合并；宿主管线迁到 moretoken 自有 scripts/admission-watch.cmd + MoreToken-AdmissionSync(30min, wait=True)；旧 AImlyForge-AdmissionSyncWatch 已禁用；go test 全绿、mt-deploy 15 PASS；运行时反证：3/5 表下 /doctor coding 仍=4；首轮被中止并修复“负退出码仍拷旧产物”bug；目标表已恢复（10700 bytes, agnes coding 4/5）。待 19:13 首轮端到端核销
+T-049 端到端验证完成：19:13/19:43 定时轮 watch exit=1 + round done，admitted.json 19:51 更新（5289B, agnes coding 4/5）；20:13 轮运行中；旧 dev-fleet 任务禁用，新 MoreToken-AdmissionSync(wait=True) 正常。待 24h 看 coding_supply 的 admission_empty
 
 ### 关键约定
 
@@ -68,4 +71,4 @@ T-049 实施并部署：internal/admission 按模型×维度 best-of-window(3h) 
 
 | 日期 | 任务 | 成果 | 问题 |
 |------|------|------|------|
-| 2026-10-25 | T-049 实施并部署：internal/admission 按模型×维度 best-of-window(3h) 合并；宿主管线迁到 moretoken 自有 scripts/admission-watch.cmd + MoreToken-AdmissionSync(30min, wait=True)；旧 AImlyForge-AdmissionSyncWatch 已禁用；go test 全绿、mt-deploy 15 PASS；运行时反证：3/5 表下 /doctor coding 仍=4；首轮被中止并修复“负退出码仍拷旧产物”bug；目标表已恢复（10700 bytes, agnes coding 4/5）。待 19:13 首轮端到端核销 | T-049 实施并部署：int... | |
+| 2026-10-25 | T-049 端到端验证完成：19:13/19:43 定时轮 watch exit=1 + round done，admitted.json 19:51 更新（5289B, agnes coding 4/5）；20:13 轮运行中；旧 dev-fleet 任务禁用，新 MoreToken-AdmissionSync(wait=True) 正常。待 24h 看 coding_supply 的 admission_empty | T-049 端到端验证完成... | |
