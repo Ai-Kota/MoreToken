@@ -1,6 +1,6 @@
-# MoreToken — 免费优先的会话保持型路由网关
+# MoreToken — 会话保持型多模型路由网关
 
-一个端点，底下自动切模型：**默认走免费省钱；免费挂了无缝切付费兜底、会话不掉；免费恢复自动切回。**
+一个端点，底下自动切模型：**多个 provider 池按优先级排列，任意一个挂了无缝切下一个、会话不掉；恢复正常后自动切回。**
 
 定位：降低开发成本 + 会话永不掉线。详细设计见 [ADR-003](docs/decisions/ADR-003-positioning.md) 与 [系统架构](docs/architecture/ARCHITECTURE.md)。
 
@@ -13,8 +13,9 @@
 - **恒定端点**：Claude Code / OpenAI 客户端只配一次 `http://localhost:8462`，provider 故障不影响会话
 - **虚拟模型**：客户端只说"要什么类型"（`auto:reasoning`），具体模型由网关挑——模型换代对客户端透明（见下）
 - **双协议**：`/v1/messages`（Anthropic，Claude Code）+ `/v1/chat/completions`（OpenAI）
-- **格式隔离**：两条协议路径内部完全隔离，互不串选（每条路径各有独立的 free→paid 链）
-- **免费优先 + 确定性回归**：任一免费 key 健康即走免费；全挂才进付费；免费恢复健康 ≥T 分钟自动切回，抖动 <T 不切（防抖）
+- **候选池机制**：多个 provider 按优先级排列（免费在前、付费在后）；任意一个挂了自动切下一个；恢复后自动切回。所有候选本质上都是同一个池里的 key，没有特殊的"付费降级"逻辑——只是排在后面的额外候选。
+- **格式隔离**：两条协议路径内部完全隔离，互不串选（每条路径各有独立的候选链）
+- **优先降级**：候选池按优先级排列（免费在前，付费在后）；任一候选健康即使用；全部不可用时自动切下一个；恢复正常后自动切回
 - **多 key 轮换**：账号级限流由多 key 吸收（agnes 免费档 20 RPM/**账号**且账号隔离）；429 冷却 60s、401/403 长禁 1h
 - **零外部依赖**：Go 1.25 纯标准库、单二进制；NATS 与 vault 都经 `exec` 调本机 CLI，不进 Go 依赖
 
@@ -49,6 +50,8 @@ bin/moretoken.exe -config config/config.json
 **解析失败的语义**：不 fatal，保留占位符 → 该 key 视为"无凭据"不进池 → 该池为空时返回 **503**（而不是把占位符当 key 发上游换回 401）。
 失败明细写入启动日志（`WARN unresolved key: <provider>[N]: vault:<path> (<原因>)`），并如实反映在 `/health` 的 `keys` / `unresolved` 字段上。
 
+> **关于 tier（free/paid）字段**：这个字段仅用于候选排序（免费在前、付费在后），不影响路由逻辑。本质上所有 provider 都是同一个候选池里的候选，按优先级排列。任何候选不可用时，自动切换到下一个。所谓"付费兜底"不过是排在下方的几个额外候选，不是特殊的降级机制。
+
 ## API 端点
 
 | 端点 | 方法 | 说明 |
@@ -68,7 +71,7 @@ cd E:/repos/aimly-console
 npm run dev
 ```
 
-渲染当前层（free/paid）、各池状态表（keys / unresolved / cooling / backed_off）、
+渲染当前优先级层、各池状态表（keys / unresolved / cooling / backed_off）、
 切换事件时间线；**90s 收不到 status 会明示"总线离线"**，不静默。
 
 **数据通路**：本网关 → NATS `aimly.system.freetier.status`（30s）/ `.event`（即时）→ 前端订阅。
@@ -149,11 +152,12 @@ set ANTHROPIC_BASE_URL=http://localhost:8462
 set ANTHROPIC_MODEL=auto:reasoning
 ```
 
-免费层有**两个厂商**（agnes 原生即 Anthropic 协议，xkiro 实测 `/v1/messages` 亦为 200）：
-`agnes-anthropic` → `xkiro-anthropic`（MiniMax/Qwen，异厂商）；全挂时切 `agnes-paid-anthropic` 兜底。
+免费层有**三个厂商**（agnes 原生即 Anthropic 协议，xkiro 实测 `/v1/messages` 亦为 200，openrouter 提供聚合）：
+`agnes-anthropic` → `xkiro-anthropic`（MiniMax/Qwen，异厂商）→ `openrouter-anthropic`；三路全挂时切付费 key。
 
-> **厂商多样性**：agnes 与 xkiro 是不同平台，agnes 平台级故障时 xkiro 仍可服务。
-> 但**付费兜底仍与免费主力同厂商**（agnes）——真正的付费级异厂商隔离需要一把别家付费 key 入库。
+> **候选池说明**：tier 字段（free/paid）仅用于排序——免费候选排在付费候选前面。
+> 本质上是同一套降级切换机制，"付费"只是排在后面的几个额外候选。
+> 当前付费候选只有 agnes-paid（与免费主力同厂商），真正的异厂商付费 key 尚未入库。
 
 ### 上游布局
 
@@ -163,8 +167,11 @@ set ANTHROPIC_MODEL=auto:reasoning
 | `xkiro` | openai | free | 11 | **xkiro**（MiniMax M3 / Qwen3 Coder / Qwen3.7 Max，仅 `:free` 可用） |
 | `agnes-anthropic` | anthropic | free | 33 | agnes |
 | `xkiro-anthropic` | anthropic | free | 11 | **xkiro**（异厂商兜底） |
-| `agnes-paid-anthropic` | anthropic | paid | 1 | agnes Token Plan |
-| `agnes-paid-openai` | openai | paid | 1 | agnes Token Plan |
+| `openrouter-anthropic` | anthropic | free | 7 | OpenRouter 聚合（Nemotron/Ling/Dots 等） |
+| `agnes-paid-anthropic` | anthropic | paid | 1 | agnes Token Plan（同厂商，额外候选） |
+| `agnes-paid-openai` | openai | paid | 1 | agnes Token Plan（同厂商，额外候选） |
+
+> **注意**：paid tier 的 provider 与 free tier 是同一套降级切换机制的一部分，不是特殊的"兜底层"。它们只是排在候选链末尾的额外候选，任何 free provider 不可用时都会自动切过去。当前 paid 候选仍只有 agnes 一家，真正的异厂商付费 key 尚未入库。
 
 ## 项目结构
 
@@ -176,8 +183,8 @@ moretoken/
 │   ├── config/                # 配置加载 + 密钥指针解析（env:/vault:）
 │   ├── provider/              # 上游调用 + 失败分类（I7 重试安全边界）+ URL 拼装
 │   ├── pool/                  # 多 key 池：RR + 429 冷却 + 401/403 长禁
-│   ├── router/                # 格式隔离 + 免费优先 + 同格式 fallback（每请求兜底）
-│   ├── state/                 # 免费层观测器：定向探活 + 平滑上报（**不参与路由**，2026-09-20 起）
+│   ├── router/                # 格式隔离 + 候选池路由（任意候选故障自动切换）
+│   ├── state/                 # 候选池观测器：定向探活 + 平滑上报（**不参与路由**，2026-09-20 起）
 │   ├── proxy/                 # 协议端点 + 决策日志
 │   └── nats/                  # 状态/事件发布（exec nats.cli，缺失降级 no-op）
 └── docs/
