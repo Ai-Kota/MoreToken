@@ -79,6 +79,8 @@ type ModelAdmission struct {
 	AnthropicOK    bool                `json:"anthropic_ok"`
 	BatteryVerdict string              `json:"battery_verdict"`
 	Dims           map[string]DimScore `json:"dims"`
+	// CheckedAt 该轮实测时刻（RFC3339）。T-049：跨轮合并用它判断旧证据是否还在窗口内。
+	CheckedAt string `json:"checked_at,omitempty"`
 }
 
 // DimScore 一个维度的实测得分。字段名与下方 json tag 即**表格式契约**（见包注释）。
@@ -87,11 +89,24 @@ type DimScore struct {
 	Total  int `json:"total"`
 }
 
+// dimEvidence 一个维度的证据 + 它被实测的时刻。
+type dimEvidence struct {
+	score DimScore
+	at    time.Time
+}
+
+// rowState 一个模型在网关内的合并状态。row 是给 Admitted/Stats/Rows 看的
+// “当前有效结论”；dims 保留每个维度的证据时间，供下一轮合并判断新鲜度。
+type rowState struct {
+	row  ModelAdmission
+	dims map[string]dimEvidence
+}
+
 // Table 一份已加载的准入选表。
 type Table struct {
 	mu       sync.RWMutex
 	path     string
-	byNormal map[string]ModelAdmission // 归一化后的模型名 → 记录
+	byNormal map[string]rowState // 归一化后的模型名 → 合并状态
 	loadedAt time.Time
 	mtime    time.Time
 	lastErr  string
@@ -104,7 +119,16 @@ type Table struct {
 	//
 	// ⚠️ 默认仍是 1.0：**不配置就与接入前完全一致**，不静默放宽任何东西。
 	minRatio float64
+
+	// now / evidenceWindow 是 T-049 的跨轮稳定性策略：
+	// 评测器每 30 分钟重写一次表，单轮低分（如 agnes coding 3/5）不得覆盖
+	// 窗口内已经过线的证据（4/5）。窗口外的旧证据自动淘汰，不无限期掩盖退化。
+	now            func() time.Time
+	evidenceWindow time.Duration
 }
+
+// defaultEvidenceWindow 旧证据保留窗口（T-049 定案：3 小时 ≈ 6 轮评测）。
+const defaultEvidenceWindow = 3 * time.Hour
 
 // normalizeModel 归一化模型名，消除跨仓书写差异（大小写、首尾空白）。
 //
@@ -117,7 +141,10 @@ func normalizeModel(s string) string { return strings.ToLower(strings.TrimSpace(
 //
 // 调用方应据 Empty() 判断"表是否可用"，据此决定是严格过滤还是回退。
 func Load(path string) *Table {
-	t := &Table{path: path, byNormal: map[string]ModelAdmission{}, minRatio: 1.0}
+	t := &Table{
+		path: path, byNormal: map[string]rowState{}, minRatio: 1.0,
+		now: time.Now, evidenceWindow: defaultEvidenceWindow,
+	}
 	t.reload()
 	return t
 }
@@ -149,11 +176,17 @@ func (t *Table) MinRatio() float64 {
 }
 
 // reload 重新读盘（持写锁）。解析成功才替换内容 —— 半截/坏文件不得清空在用的表。
+//
+// T-049：新表不再直接覆盖旧表，而是按“模型 × 维度”与上一版合并：
+//   - 窗口内已过线的旧证据，不被单轮低分覆盖（评测器每 30 分钟一轮，噪声很大）；
+//   - 本轮没测到的模型，保留窗口内的旧证据；
+//   - 窗口外的证据淘汰，避免无限期掩盖真实退化。
+// 合并只影响“选型用的结论”，不改变表格式契约。
 func (t *Table) reload() {
 	st, err := os.Stat(t.path)
 	if err != nil {
 		t.mu.Lock()
-		t.byNormal = map[string]ModelAdmission{}
+		t.byNormal = map[string]rowState{}
 		t.lastErr = "读表失败: " + err.Error()
 		t.mtime = time.Time{}
 		t.mu.Unlock()
@@ -173,23 +206,20 @@ func (t *Table) reload() {
 		t.mu.Unlock()
 		return
 	}
-	m := make(map[string]ModelAdmission, len(rows))
-	for _, r := range rows {
-		m[normalizeModel(r.Model)] = r
-	}
 
-	// ── 健全性闸：有内容但**一条都认不出** ⇒ 视为表不可用（回退 + 可见）──
-	//
-	// 为什么必须有（2026-10-01 实测演示）：本包与产出方可隔着一个**没有版本号的跨仓契约**。
-	// 实测把字段名 `dims` 改成 `dimensions`（模型名/维度名/分数全没变），解析**不报错**，
-	// 但每行的 Dims 都是 nil ⇒ `admits` 全 false ⇒ 表非空 ⇒ 严格过滤 ⇒ **整个池被清空**、
-	// `auto:*` 全部无候选报错，**且一声不响**。
-	//
-	// 这正是本项目最忌的形态：不是"降级"而是"静默归零"。故此处把"有内容却认不出"判为
-	// **表不可用** —— 于是 Empty() 为真、路由回退到 kinds，并在 /doctor 与启动日志上明说。
-	// 宁可退回旧行为，不可悄悄把池清空。
+	now := t.now()
+	minRatio := t.MinRatio()
+
+	// 所有行都进 newBy（保持“表里有行 = 表可用”的既有语义），
+	// 但只有 validRow 参与跨轮合并；无效行作为“非准入行”保留，
+	// 让 Empty()/Stats 仍能看见“表里有内容”，而不是误判为表不可用后 fail-open。
+	newBy := make(map[string]ModelAdmission, len(rows))
 	recognizable := 0
-	for _, r := range m {
+	for _, r := range rows {
+		if strings.TrimSpace(r.Model) == "" {
+			continue
+		}
+		newBy[normalizeModel(r.Model)] = r
 		for _, d := range r.Dims {
 			if d.Total > 0 {
 				recognizable++
@@ -197,24 +227,224 @@ func (t *Table) reload() {
 			}
 		}
 	}
-	if len(m) > 0 && recognizable == 0 {
+
+	t.mu.RLock()
+	old := t.byNormal
+	t.mu.RUnlock()
+
+	if len(rows) > 0 && recognizable == 0 {
+		// ── 健全性闸：有内容但**一条都认不出** ⇒ 契约漂移 ──
+		// 为什么必须有（2026-10-01 实测演示）：字段名 dims→dimensions 解析不报错，
+		// 但每行 Dims 都 nil ⇒ admits 全 false ⇒ 表非空 ⇒ 严格过滤 ⇒ 整个池被清空且无声。
+		// 保留旧表（若有），否则判不可用并回退 kinds。
+		if len(old) > 0 {
+			t.mu.Lock()
+			t.loadedAt = now
+			t.mtime = st.ModTime()
+			t.lastErr = fmt.Sprintf("新表有 %d 条但无一条含可识别维度（Total>0）——保留上一版并回退可见", len(rows))
+			t.mu.Unlock()
+			return
+		}
 		t.mu.Lock()
-		t.byNormal = map[string]ModelAdmission{}
-		t.loadedAt = time.Now()
+		t.byNormal = map[string]rowState{}
+		t.loadedAt = now
 		t.mtime = st.ModTime()
 		t.lastErr = fmt.Sprintf(
 			"表有 %d 条但无一条含可识别的维度样本（Total>0）——疑为格式/契约漂移；"+
-				"按**不可用**处理并回退到 kinds（否则会静默清空整个池）", len(m))
+				"按**不可用**处理并回退到 kinds（否则会静默清空整个池）", len(rows))
 		t.mu.Unlock()
 		return
 	}
 
+	if len(rows) == 0 {
+		// 空文件：生成物写入窗口/上游全挂时常见；保留上一版，不让空文件清空在用表。
+		if len(old) > 0 {
+			t.mu.Lock()
+			t.loadedAt = now
+			t.mtime = st.ModTime()
+			t.lastErr = "表为空——保留上一版（不因空生成物清空在用表）"
+			t.mu.Unlock()
+			return
+		}
+		t.mu.Lock()
+		t.byNormal = map[string]rowState{}
+		t.loadedAt = now
+		t.mtime = st.ModTime()
+		t.lastErr = "表为空"
+		t.mu.Unlock()
+		return
+	}
+
+	merged := make(map[string]rowState, len(newBy)+len(old))
+	for key, nr := range newBy {
+		if validRow(nr) {
+			nst := newRowState(nr, now)
+			if ost, ok := old[key]; ok {
+				nst = mergeRowState(ost, nst, now, t.evidenceWindow, minRatio)
+			}
+			merged[key] = nst
+			continue
+		}
+		// 无效新行：若上一版有窗口内的有效证据，保留它（sync 的 valid-row 口径）；
+		// 否则保留该行作为“非准入行”，让表仍被视为可用（不 fail-open 到 kinds）。
+		if ost, ok := old[key]; ok {
+			if kept, ok := retainOldRow(ost, now, t.evidenceWindow); ok {
+				merged[key] = kept
+				continue
+			}
+		}
+		merged[key] = rowState{row: nr}
+	}
+	// 本轮没测到的模型：保留窗口内的旧证据。
+	for key, ost := range old {
+		if _, ok := newBy[key]; ok {
+			continue
+		}
+		if kept, ok := retainOldRow(ost, now, t.evidenceWindow); ok {
+			merged[key] = kept
+		}
+	}
+
 	t.mu.Lock()
-	t.byNormal = m
-	t.loadedAt = time.Now()
+	t.byNormal = merged
+	t.loadedAt = now
 	t.mtime = st.ModTime()
 	t.lastErr = ""
 	t.mu.Unlock()
+}
+
+// validRow 只把“覆盖完整、协议通、至少一个维度有样本”的行当证据。
+// 与 sync-admission.ps1 的 valid-row 口径一致（T-046）。
+func validRow(r ModelAdmission) bool {
+	if !r.AnthropicOK {
+		return false
+	}
+	switch r.BatteryVerdict {
+	case "PASS", "FAIL", "UNCERTAIN":
+	default:
+		return false
+	}
+	for _, d := range r.Dims {
+		if d.Total > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func parseCheckedAt(s string) time.Time {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}
+	}
+	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
+		return t
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t
+	}
+	return time.Time{}
+}
+
+func newRowState(r ModelAdmission, now time.Time) rowState {
+	at := parseCheckedAt(r.CheckedAt)
+	if at.IsZero() {
+		at = now // 缺时间戳按“刚测”处理：宁可保留一轮，不因跨仓字段缺失直接丢证据
+	}
+	dims := make(map[string]dimEvidence, len(r.Dims))
+	for k, d := range r.Dims {
+		if d.Total > 0 {
+			dims[k] = dimEvidence{score: d, at: at}
+		}
+	}
+	return rowState{row: r, dims: dims}
+}
+
+func ratio(d DimScore) float64 {
+	if d.Total <= 0 {
+		return 0
+	}
+	return float64(d.Passed) / float64(d.Total)
+}
+
+func fresh(at, now time.Time, window time.Duration) bool {
+	if window <= 0 {
+		return false
+	}
+	return !at.IsZero() && now.Sub(at) <= window
+}
+
+// mergeRowState 新证据 + 窗口内更优的旧证据，按维度合并。
+func mergeRowState(old, new rowState, now time.Time, window time.Duration, minRatio float64) rowState {
+	if !new.row.AnthropicOK {
+		return new // 协议闸没过：不保留旧维度
+	}
+	merged := make(map[string]dimEvidence, len(new.dims)+len(old.dims))
+	for k, v := range new.dims {
+		merged[k] = v
+	}
+	for k, ov := range old.dims {
+		if !fresh(ov.at, now, window) {
+			continue
+		}
+		if !old.row.admits(k, minRatio) {
+			continue
+		}
+		nv, ok := new.dims[k]
+		if !ok || ratio(nv.score) < ratio(ov.score) {
+			merged[k] = ov
+		}
+	}
+	if len(merged) == 0 {
+		return new
+	}
+	row := new.row
+	row.Dims = make(map[string]DimScore, len(merged))
+	var newest time.Time
+	for k, v := range merged {
+		row.Dims[k] = v.score
+		if v.at.After(newest) {
+			newest = v.at
+		}
+	}
+	if !newest.IsZero() {
+		row.CheckedAt = newest.Format(time.RFC3339Nano)
+	}
+	return rowState{row: row, dims: merged}
+}
+
+// retainOldRow 本轮新表没有该模型：保留窗口内仍有效的旧维度。
+func retainOldRow(old rowState, now time.Time, window time.Duration) (rowState, bool) {
+	if !old.row.AnthropicOK {
+		return rowState{}, false
+	}
+	switch old.row.BatteryVerdict {
+	case "PASS", "FAIL", "UNCERTAIN":
+	default:
+		return rowState{}, false
+	}
+	kept := make(map[string]dimEvidence, len(old.dims))
+	for k, v := range old.dims {
+		if fresh(v.at, now, window) {
+			kept[k] = v
+		}
+	}
+	if len(kept) == 0 {
+		return rowState{}, false
+	}
+	row := old.row
+	row.Dims = make(map[string]DimScore, len(kept))
+	var newest time.Time
+	for k, v := range kept {
+		row.Dims[k] = v.score
+		if v.at.After(newest) {
+			newest = v.at
+		}
+	}
+	if !newest.IsZero() {
+		row.CheckedAt = newest.Format(time.RFC3339Nano)
+	}
+	return rowState{row: row, dims: kept}, true
 }
 
 // RefreshIfChanged 表文件 mtime 变了就重载。供路由前轻量调用（stat 一次）。
@@ -299,8 +529,8 @@ func (t *Table) Admitted(model, dim string) bool {
 	}
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	r, ok := t.byNormal[normalizeModel(model)]
-	return ok && r.admits(dim, t.minRatio)
+	st, ok := t.byNormal[normalizeModel(model)]
+	return ok && st.row.admits(dim, t.minRatio)
 }
 
 // admits 是准据的**唯一实现** —— Admitted 与 Stats 都必须走它。
@@ -352,8 +582,8 @@ func (t *Table) Rows() []ModelAdmission {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	out := make([]ModelAdmission, 0, len(t.byNormal))
-	for _, r := range t.byNormal {
-		out = append(out, r)
+	for _, st := range t.byNormal {
+		out = append(out, st.row)
 	}
 	return out
 }
@@ -365,13 +595,13 @@ func (t *Table) Stats() (models int, reasoning int, coding int, err string) {
 	}
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	for _, r := range t.byNormal {
+	for _, st := range t.byNormal {
 		models++
 		// 走 admits()，与 Admitted() 同一判据 —— 否则报出来的数与真实行为会分叉（见 admits 注释）。
-		if r.admits(DimReasoning, t.minRatio) {
+		if st.row.admits(DimReasoning, t.minRatio) {
 			reasoning++
 		}
-		if r.admits(DimCoding, t.minRatio) {
+		if st.row.admits(DimCoding, t.minRatio) {
 			coding++
 		}
 	}

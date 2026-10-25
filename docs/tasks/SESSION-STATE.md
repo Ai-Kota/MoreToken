@@ -9,10 +9,10 @@
 
 | 字段 | 值 |
 |------|------|
-| **会话日期** | 2026-10-25 17:54:11 |
-| **执行任务** | T-049 定案：走稳定现有第二供给（不补 provider、不降 0.8）。根因是 sync-admission.ps1 的 newer-rows-win 让单轮低分覆盖历史 4/5；网关 Admitted 按 0.8 正确执行。mt-report.py 已加 coding_supply（19/19 coding 全部 agnes admission_empty、全部 xkiro 救回）。下一步：改 ops/dev-fleet/sync-admission.ps1 为 best-of-window 3h（跨项目，待确认） |
+| **会话日期** | 2026-10-25 18:52:50 |
+| **执行任务** | T-049 实施：internal/admission 按模型×维度 best-of-window(3h) 合并；宿主管线迁到 moretoken 自有 scripts/admission-watch.cmd + MoreToken-AdmissionSync(30min, wait=True)，旧 dev-fleet 任务禁用；运行时反证 3/5 表下 /doctor coding 仍=4；首轮被中止并修复“负退出码仍拷旧产物”bug；待 19:13 端到端 |
 | **完成状态** | 🔄 进行中 |
-| **会话摘要** | T-049 定案：走稳定现有第二供给（不补 provider、不降 0.8）。根因是 sync-admission.ps1 的 newer-rows-win 让单轮低分覆盖历史 4/5；网关 Admitted 按 0.8 正确执行。mt-report.py 已加 coding_supply（19/19 coding 全部 agnes admission_empty、全部 xkiro 救回）。下一步：改 ops/dev-fleet/sync-admission.ps1 为 best-of-window 3h（跨项目，待确认） |
+| **会话摘要** | T-049 实施：internal/admission 按模型×维度 best-of-window(3h) 合并；宿主管线迁到 moretoken 自有 scripts/admission-watch.cmd + MoreToken-AdmissionSync(30min, wait=True)，旧 dev-fleet 任务禁用；运行时反证 3/5 表下 /doctor coding 仍=4；首轮被中止并修复“负退出码仍拷旧产物”bug；待 19:13 端到端 |
 
 ---
 
@@ -24,15 +24,17 @@
 
 | 任务ID | 进度 | 停在哪里 | 下一步 |
 |:------:|:----:|---------|--------|
-| T-049 定案：走稳定现有第二供给（不补 provider、不降 0.8）。根因是 sync-admission.ps1 的 newer-rows-win 让单轮低分覆盖历史 4/5；网关 Admitted 按 0.8 正确执行。mt-report.py 已加 coding_supply（19/19 coding 全部 agnes admission_empty、全部 xkiro 救回）。下一步：改 ops/dev-fleet/sync-admission.ps1 为 best-of-window 3h（跨项目，待确认） | 🔄 | 上次会话中断 | 确认后修改 sync-admission.ps1；24h 后看 coding admission_empty 是否下降 |
+| T-049 实施：internal/admission 按模型×维度 best-of-window(3h) 合并；宿主管线迁到 moretoken 自有 scripts/admission-watch.cmd + MoreToken-AdmissionSync(30min, wait=True)，旧 dev-fleet 任务禁用；运行时反证 3/5 表下 /doctor coding 仍=4；首轮被中止并修复“负退出码仍拷旧产物”bug；待 19:13 端到端 | 🔄 | 上次会话中断 | 19:13 查 admission-sync.log 的 round done + target mtime；24h 看 coding_supply admission_empty |
 
 ### 未完成的修改
 
 | 文件 | 修改内容 | 是否已提交 |
 |------|---------|:---------:|
+| CHANGELOG.md | （待确认） | ⬜ |
 | docs/tasks/T-049.md | （待确认） | ⬜ |
 | docs/tasks/TASKS.md | （待确认） | ⬜ |
-| scripts/mt-report.py | （待确认） | ⬜ |
+| internal/admission/admission.go | （待确认） | ⬜ |
+| internal/admission/admission_test.go | （待确认） | ⬜ |
 
 ### 待决策项
 
@@ -56,7 +58,7 @@
 
 ### 项目当前状态
 
-T-049 定案：走稳定现有第二供给（不补 provider、不降 0.8）。根因是 sync-admission.ps1 的 newer-rows-win 让单轮低分覆盖历史 4/5；网关 Admitted 按 0.8 正确执行。mt-report.py 已加 coding_supply（19/19 coding 全部 agnes admission_empty、全部 xkiro 救回）。下一步：改 ops/dev-fleet/sync-admission.ps1 为 best-of-window 3h（跨项目，待确认）
+T-049 实施：internal/admission 按模型×维度 best-of-window(3h) 合并；宿主管线迁到 moretoken 自有 scripts/admission-watch.cmd + MoreToken-AdmissionSync(30min, wait=True)，旧 dev-fleet 任务禁用；运行时反证 3/5 表下 /doctor coding 仍=4；首轮被中止并修复“负退出码仍拷旧产物”bug；待 19:13 端到端
 
 ### 关键约定
 
@@ -72,4 +74,4 @@ T-049 定案：走稳定现有第二供给（不补 provider、不降 0.8）。�
 
 | 日期 | 任务 | 成果 | 问题 |
 |------|------|------|------|
-| 2026-10-25 | T-049 定案：走稳定现有第二供给（不补 provider、不降 0.8）。根因是 sync-admission.ps1 的 newer-rows-win 让单轮低分覆盖历史 4/5；网关 Admitted 按 0.8 正确执行。mt-report.py 已加 coding_supply（19/19 coding 全部 agnes admission_empty、全部 xkiro 救回）。下一步：改 ops/dev-fleet/sync-admission.ps1 为 best-of-window 3h（跨项目，待确认） | T-049 定案：走稳定现... | |
+| 2026-10-25 | T-049 实施：internal/admission 按模型×维度 best-of-window(3h) 合并；宿主管线迁到 moretoken 自有 scripts/admission-watch.cmd + MoreToken-AdmissionSync(30min, wait=True)，旧 dev-fleet 任务禁用；运行时反证 3/5 表下 /doctor coding 仍=4；首轮被中止并修复“负退出码仍拷旧产物”bug；待 19:13 端到端 | T-049 实施：internal/adm... | |

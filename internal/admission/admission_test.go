@@ -290,6 +290,9 @@ func TestWatch_PicksUpTableChange(t *testing.T) {
 	if !tab.Admitted("m1", DimCoding) || tab.Admitted("m2", DimCoding) {
 		t.Fatal("初始表应只准入 m1")
 	}
+	// 本测试只验证"热加载把新表带进来"；T-049 的旧证据窗口会按设计保留 m1 3 小时，
+	// 这里显式关掉窗口，让断言仍落在“替换”语义上。
+	tab.evidenceWindow = 0
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -343,7 +346,9 @@ func TestStats(t *testing.T) {
 	//   c: 两维 5/5 但**协议闸没过**   → 两个维度都不进（成绩再高也不准入）
 	n, r, c, errStr := Load(p).Stats()
 	if n != 3 {
-		t.Errorf("模型数应 3，got %d", n)
+		// 无效行（c: anthropic_ok=false）仍算“表里有行”，只是不准入；
+		// 这样 Empty() 不会误判为表不可用而 fail-open 到 kinds。
+		t.Errorf("模型数应 3（含非准入行），got %d", n)
 	}
 	if r != 1 {
 		t.Errorf("reasoning 准入应 1（只有 a），got %d", r)

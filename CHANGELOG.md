@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   查询：`python scripts/mt-report.py [--days N] [--json]`。详见 `docs/telemetry.md`。
 
 ### Changed（行为变化，升级须知）
+- **T-049 准入表跨轮稳定 + 宿主管线迁出 dev-fleet**（2026-10-25）：
+  `internal/admission` 不再用新表直接覆盖旧表，而是按“模型 × 维度”做
+  **best-of-window（3 小时）** 合并——单轮低分（如 agnes coding 3/5）不再覆盖
+  窗口内已过线的 4/5；窗口外自动淘汰。宿主管线改为 moretoken 自有
+  `scripts/admission-watch.cmd` + `run-admission-hidden.vbs` +
+  `MoreToken-AdmissionSync` 任务（30 分钟，wait=True）；旧
+  `AImlyForge-AdmissionSyncWatch` 已禁用，**不再依赖 dev-fleet**。
+  运行记录新增 `coding_supply` 摘要。
 - **T-043：`agnes-3.0-flash` 剔出免费池（排除名单）**（2026-10-25）：config 新增
   `exclude_models`；`MergeAuto`、`ApplyAdmission`、`-harvest`（继承旧清单 + 实测纳新）
   三处共同跳过名单内模型，堵住"删一次清单、下一轮 harvest 又写回"的复发路径。
