@@ -117,6 +117,17 @@ def summarize(reqs: list[dict], snaps: list[dict], files: list[str]) -> dict:
     tokens_out = sum(int(r.get("output_tokens") or 0) for r in reqs)
     usage_known = sum(1 for r in reqs if r.get("usage_known"))
 
+    # T-049：coding 供给冗余证据——哪些 provider 被准入过滤空、最终由谁服务、是否真失败。
+    coding = [r for r in reqs if r.get("want_kind") == "coding"]
+    coding_empty = Counter()
+    coding_served = Counter()
+    for r in coding:
+        for a in r.get("attempts") or []:
+            if a.get("kind") == "admission_empty":
+                coding_empty[a.get("provider") or "?"] += 1
+        if r.get("outcome") == "ok":
+            coding_served[r.get("provider") or "?"] += 1
+
     return {
         "files": [os.path.basename(f) for f in files],
         "requests": len(reqs),
@@ -132,6 +143,13 @@ def summarize(reqs: list[dict], snaps: list[dict], files: list[str]) -> dict:
         "latency": lat_stats(reqs, "total_ms"),
         "ttft": lat_stats([r for r in reqs if r.get("stream")], "ttft_ms"),
         "tokens": {"input": tokens_in, "output": tokens_out, "usage_known_requests": usage_known},
+        "coding_supply": {
+            "requests": len(coding),
+            "served_by_provider": dict(coding_served),
+            "admission_empty_by_provider": dict(coding_empty),
+            "failed": sum(1 for r in coding
+                          if r.get("outcome") not in (None, "ok", "client_canceled")),
+        },
         "models": {
             k: {
                 "count": len(v),
@@ -163,6 +181,10 @@ def print_text(s: dict) -> None:
     print(f"clients: {s['clients']}")
     print(f"providers: {s['providers']}")
     print(f"want_kinds: {s['want_kinds']}")
+    cs = s.get("coding_supply") or {}
+    if cs.get("requests"):
+        print(f"coding_supply: requests={cs['requests']} served={cs['served_by_provider']} "
+              f"admission_empty={cs['admission_empty_by_provider']} failed={cs['failed']}")
     lat = s["latency"]
     print(f"latency_ms: n={lat['n']} p50={lat['p50']} p95={lat['p95']} p99={lat['p99']} max={lat['max']}")
     tt = s["ttft"]

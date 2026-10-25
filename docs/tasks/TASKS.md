@@ -68,7 +68,7 @@
 
 | T-048 | T-043 配套：生产排除名单 + tier 观测回归修复 | ✅ | **完成并部署验证（2026-10-25，mt-deploy 15 PASS / 0 FAIL）**。体检发现运行时 `tier=paid` 但所有池健康（`TickOnce` 无隔离池即返回 ⇒ `ProbeFree` 永不执行 ⇒ 档位无法回归）。同时 `exclude_models` 需写进生产 config（T-043 白名单不含 config.json）。交付：config `exclude_models:["agnes-3.0-flash"]` + `TickOnce` 在 paid 时继续探活 + 回归用例。判据：部署后池内无 3.0-flash；3–5 分钟内 NATS status `tier` 回到 free。详见 docs/tasks/T-048.md |
 
-| T-049 | anthropic/coding 偶发 503——供给单点 + 准入表清空（待定策） | 🔵 | **已诊断，待定策（2026-10-25）**。`/decisions` 1024 条：`auto:coding` 42 条中 10 条 503（全为 cc-mt，集中在 11:08–11:39）；attempts 显示 agnes-anthropic 被准入表过滤空、xkiro 轮换耗尽、openrouter 无 coding 模型。同窗口另外 32 次 `auto:coding` 成功全落在 `agnes-3.0-flash`（已于 T-043 剔出）。定策选项与未核实项见 docs/tasks/T-049.md。 |
+| T-049 | anthropic/coding 偶发 503——供给单点 + 准入表清空（已定案） | 🔵 | **已定案，待实施（2026-10-25）**：走“稳定现有第二供给”——不补新 provider、不降 0.8 门槛；修 `ops/dev-fleet/sync-admission.ps1` 的 “newer rows win”，改为按模型/维度 best-of-window（3h）；`mt-report.py` 增加 `coding_supply` 摘要。根因不是网关过滤器（`Admitted` 正确按 0.8 执行），而是单轮低分覆盖历史 4/5。详见 docs/tasks/T-049.md。`/decisions` 1024 条：`auto:coding` 42 条中 10 条 503（全为 cc-mt，集中在 11:08–11:39）；attempts 显示 agnes-anthropic 被准入表过滤空、xkiro 轮换耗尽、openrouter 无 coding 模型。同窗口另外 32 次 `auto:coding` 成功全落在 `agnes-3.0-flash`（已于 T-043 剔出）。定策选项与未核实项见 docs/tasks/T-049.md。 |
 
 | T-050 | 运行记录：给智能体的 JSONL 遥测（请求 + 快照） | ✅ | **完成并部署验证（2026-10-25 15:57，mt-deploy 15 PASS / 0 FAIL）**。用户定性：要一份完整运行记录供智能体分析优化，不要看板/告警/新栈。交付：`internal/telemetry`（按天轮转、30 天保留）+ 每请求一行（client/协议/虚拟模型/实际 provider-model-key_id/逐 key attempts/TTFT/token/budget/config_hash/admission 版本）+ 60s 快照 + `scripts/mt-report.py`。真实文件已验证：5 请求/3 快照，成功路径带 key_id，无密钥泄漏。详见 docs/tasks/T-050.md、docs/telemetry.md。 |
 
