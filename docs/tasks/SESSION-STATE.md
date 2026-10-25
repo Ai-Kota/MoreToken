@@ -9,10 +9,10 @@
 
 | 字段 | 值 |
 |------|------|
-| **会话日期** | 2026-10-25 15:59:44 |
-| **执行任务** | T-050 运行记录上线：按天 JSONL（请求+60s快照+逐key attempts+TTFT/token/版本），宿主机 docker/runtime/telemetry 可读；客户端取消单独分类；mt-report.py 可查询；部署 15 PASS，真实文件已生成且无密钥泄漏 |
+| **会话日期** | 2026-10-25 16:55:06 |
+| **执行任务** | T-049 定策（coding 冗余）；telemetry v1.1 补 input_known/output_known；清醒状态观察 DNS 是否复发 |
 | **完成状态** | 🔄 进行中 |
-| **会话摘要** | T-050 运行记录上线：按天 JSONL（请求+60s快照+逐key attempts+TTFT/token/版本），宿主机 docker/runtime/telemetry 可读；客户端取消单独分类；mt-report.py 可查询；部署 15 PASS，真实文件已生成且无密钥泄漏 |
+| **会话摘要** | T-050 运行记录已上线并验证：117 请求/48min（113 ok / 3 client_canceled / 1 exhausted），流式 TTFT p95 5.6s；逐 key 证据可见（xkiro key0 429、key1/2 403、key3 ok）；T-048 两次 paid→free 实测生效；16:18 唯一 503 为休眠期 DNS；T-049 coding 仍单点（agnes admission_empty 7 次，全靠 xkiro） |
 
 ---
 
@@ -24,23 +24,14 @@
 
 | 任务ID | 进度 | 停在哪里 | 下一步 |
 |:------:|:----:|---------|--------|
-| T-050 运行记录上线：按天 JSONL（请求+60s快照+逐key attempts+TTFT/token/版本），宿主机 docker/runtime/telemetry 可读；客户端取消单独分类；mt-report.py 可查询；部署 15 PASS，真实文件已生成且无密钥泄漏 | 🔄 | 上次会话中断 | 观察一天的真实记录；按 models/keys/outcome 出首份优化证据；次日核对轮转与保留 |
+| T-049 定策（coding 冗余）；telemetry v1.1 补 input_known/output_known；清醒状态观察 DNS 是否复发 | 🔄 | 上次会话中断 | T-049 定策（coding 冗余）；telemetry v1.1 补 input_known/output_known；清醒状态观察 DNS 是否复发 |
 
 ### 未完成的修改
 
 | 文件 | 修改内容 | 是否已提交 |
 |------|---------|:---------:|
-| CHANGELOG.md | （待确认） | ⬜ |
-| docker/Dockerfile | （待确认） | ⬜ |
-| docker/docker-compose.vault.yml | （待确认） | ⬜ |
-| docker/docker-compose.yml | （待确认） | ⬜ |
-| docker/mt-deploy.sh | （待确认） | ⬜ |
-| docker/mt-up.sh | （待确认） | ⬜ |
-| docs/tasks/TASKS.md | （待确认） | ⬜ |
-| internal/proxy/proxy.go | （待确认） | ⬜ |
-| internal/router/router.go | （待确认） | ⬜ |
-| internal/router/router_test.go | （待确认） | ⬜ |
-| main.go | （待确认） | ⬜ |
+| docs/tasks/T-049.md | （待确认） | ⬜ |
+| docs/tasks/T-050.md | （待确认） | ⬜ |
 
 ### 待决策项
 
@@ -64,7 +55,7 @@
 
 ### 项目当前状态
 
-T-050 运行记录上线：按天 JSONL（请求+60s快照+逐key attempts+TTFT/token/版本），宿主机 docker/runtime/telemetry 可读；客户端取消单独分类；mt-report.py 可查询；部署 15 PASS，真实文件已生成且无密钥泄漏
+T-050 运行记录已上线并验证：117 请求/48min（113 ok / 3 client_canceled / 1 exhausted），流式 TTFT p95 5.6s；逐 key 证据可见（xkiro key0 429、key1/2 403、key3 ok）；T-048 两次 paid→free 实测生效；16:18 唯一 503 为休眠期 DNS；T-049 coding 仍单点（agnes admission_empty 7 次，全靠 xkiro）
 
 ### 关键约定
 
@@ -80,4 +71,4 @@ T-050 运行记录上线：按天 JSONL（请求+60s快照+逐key attempts+TTFT/
 
 | 日期 | 任务 | 成果 | 问题 |
 |------|------|------|------|
-| 2026-10-25 | T-050 运行记录上线：按天 JSONL（请求+60s快照+逐key attempts+TTFT/token/版本），宿主机 docker/runtime/telemetry 可读；客户端取消单独分类；mt-report.py 可查询；部署 15 PASS，真实文件已生成且无密钥泄漏 | T-050 运行记录上线：... | |
+| 2026-10-25 | T-049 定策（coding 冗余）；telemetry v1.1 补 input_known/output_known；清醒状态观察 DNS 是否复发 | T-050 运行记录已上线... | |
