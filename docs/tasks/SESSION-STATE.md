@@ -9,10 +9,10 @@
 
 | 字段 | 值 |
 |------|------|
-| **会话日期** | 2026-09-29 15:05:50 |
-| **执行任务** | T-030 |
-| **完成状态** | ✅ 进行中 |
-| **会话摘要** | 带外证据链布设完成（重启前入库）：boot-verify.sh（记 LastBootUpTime 基准+轮询 daemon/容器+端点三连+vault-token 全链+freellm 旁证，FAIL 附恢复命令）+ Startup vbs 隐藏宿主（wscript 实测触发 log 10→20 行全 PASS）。基线跑全 PASS。**下个会话第一件事：读 docker/runtime/boot-verify.log 里 BOOT=新时刻（今天 15:0x 之后）的段落核销 #12a/b/c，然后 dev-fleet monitor 新配置生效验证（/doctor 401 噪音应消失），T-030 收尾提交** |
+| **会话日期** | 2026-10-25 12:27:14 |
+| **执行任务** | T-043 排除名单落地并部署（agnes-3.0-flash 已出池）；T-048 修复 tier 观测卡 paid（含变异反证）；mt-deploy 15 PASS；coding 失败根因定位为 admission 表短暂清空 agnes coding 候选 + xkiro 轮换耗尽 |
+| **完成状态** | 🔄 进行中 |
+| **会话摘要** | T-043 排除名单落地并部署（agnes-3.0-flash 已出池）；T-048 修复 tier 观测卡 paid（含变异反证）；mt-deploy 15 PASS；coding 失败根因定位为 admission 表短暂清空 agnes coding 候选 + xkiro 轮换耗尽 |
 
 ---
 
@@ -24,13 +24,15 @@
 
 | 任务ID | 进度 | 停在哪里 | 下一步 |
 |:------:|:----:|---------|--------|
-| T-030 | 🔄 | 上次会话中断 | 继续执行 |
+| T-043 排除名单落地并部署（agnes-3.0-flash 已出池）；T-048 修复 tier 观测卡 paid（含变异反证）；mt-deploy 15 PASS；coding 失败根因定位为 admission 表短暂清空 agnes coding 候选 + xkiro 轮换耗尽 | 🔄 | 上次会话中断 | 观察部署后 /decisions 与 NATS tier；如需进一步降低 coding 503，补 anthropic/coding 供给或调整准入回退策略 |
 
 ### 未完成的修改
 
 | 文件 | 修改内容 | 是否已提交 |
 |------|---------|:---------:|
-| config/models.auto.json | （待确认） | ⬜ |
+| docs/tasks/SESSION-STATE.md | （待确认） | ⬜ |
+| docs/tasks/T-043.md | （待确认） | ⬜ |
+| docs/tasks/T-048.md | （待确认） | ⬜ |
 | docs/tasks/TASKS.md | （待确认） | ⬜ |
 
 ### 待决策项
@@ -55,7 +57,7 @@
 
 ### 项目当前状态
 
-带外证据链布设完成（重启前入库）：boot-verify.sh（记 LastBootUpTime 基准+轮询 daemon/容器+端点三连+vault-token 全链+freellm 旁证，FAIL 附恢复命令）+ Startup vbs 隐藏宿主（wscript 实测触发 log 10→20 行全 PASS）。基线跑全 PASS。**下个会话第一件事：读 docker/runtime/boot-verify.log 里 BOOT=新时刻（今天 15:0x 之后）的段落核销 #12a/b/c，然后 dev-fleet monitor 新配置生效验证（/doctor 401 噪音应消失），T-030 收尾提交**
+T-043 排除名单落地并部署（agnes-3.0-flash 已出池）；T-048 修复 tier 观测卡 paid（含变异反证）；mt-deploy 15 PASS；coding 失败根因定位为 admission 表短暂清空 agnes coding 候选 + xkiro 轮换耗尽
 
 ### 关键约定
 
@@ -71,4 +73,4 @@
 
 | 日期 | 任务 | 成果 | 问题 |
 |------|------|------|------|
-| 2026-09-29 | T-030 | 带外证据链布设完成... | |
+| 2026-10-25 | T-043 排除名单落地并部署（agnes-3.0-flash 已出池）；T-048 修复 tier 观测卡 paid（含变异反证）；mt-deploy 15 PASS；coding 失败根因定位为 admission 表短暂清空 agnes coding 候选 + xkiro 轮换耗尽 | T-043 排除名单落地并... | |

@@ -58,7 +58,7 @@
 
 | T-042 | 付费档退出 auto:* 兜底链（用户定性：免费池自循环兜底，付费只基建点名直连） | 🔵 | **开工中**。用户定性（2026-10-07）："付费大模型兜底是个伪命题，应该是免费大模型循环切换兜底"。撤销 T-039 的付费兜底设计：虚拟模型候选链只取免费层（config `allow_paid_fallback` 指针：未配置=false 新政策、显式 true=回滚旧行为）；字面模型路由不受影响（基建点名 agnes-3.0-flash 仍直达）。免费全挂 = 503 + T-040 日账本等 24:00 重置，不烧付费。详见 docs/tasks/T-042.md |
 
-| T-043 | 免费池内 agnes-3.0-flash（harvest 纳新）是否扣免费 key 计费——查清 + 定策 | 🔵 | **已立项（T-041/T-042 勘误牵出）**。事实链：3.0-flash 被 harvest 收进**免费** agnes provider（config/models.auto.json），auto:* 可合法落到它；但 3.0 定位"付费维护"，free key 直打 3.0 能否真免费**无数据**（今日 429 池未复现该计费路径，pro 系的 `remaining: ＄0.00` 是另一事）。处置选项：a. 查清 agnes 侧计费口径（找官方说明/对照实测）b. 计费不可信则把 3.0 从 models.auto.json 免费清单剔除（kinds 照 T-039 保留在 paid provider）c. 维持现状。详见 docs/tasks/T-041.md「勘误」与 T-042.md「未核实」 |
+| T-043 | 免费池内 agnes-3.0-flash（harvest 纳新）是否扣免费 key 计费——查清 + 定策 | ✅ | **已完成并部署验证（2026-10-25）**。用户拍板"不用 3.0-flash"后，本任务此前只停在定案；体检发现它仍在两个免费池并承接真实 `auto:coding` 流量（/decisions 实测 32 次）。交付：config `exclude_models` + `MergeAuto`/`ApplyAdmission`/`harvest` 三处跳过 + 单测 + `models.auto.json` 清理。部署后容器池内无该模型，启动日志"新增模型"14→12。详见 docs/tasks/T-043.md。事实链：3.0-flash 被 harvest 收进**免费** agnes provider（config/models.auto.json），auto:* 可合法落到它；但 3.0 定位"付费维护"，free key 直打 3.0 能否真免费**无数据**（今日 429 池未复现该计费路径，pro 系的 `remaining: ＄0.00` 是另一事）。处置选项：a. 查清 agnes 侧计费口径（找官方说明/对照实测）b. 计费不可信则把 3.0 从 models.auto.json 免费清单剔除（kinds 照 T-039 保留在 paid provider）c. 维持现状。详见 docs/tasks/T-041.md「勘误」与 T-042.md「未核实」 |
 
 | T-044 | 虚拟模型输出预算下限——推理型请求不再被小 max_tokens 测成残废 | ✅ | **完成并提交（`556cde6`，2026-10-08）**。实测驱动（T-041 追加二）：主力 2.5-flash 是推理型，客户端默认 32–128 预算 ⇒ 思考吃光、正文恒空（难题 7/8 "答不出"）；4096 预算同题 6/8 对——**同模型纯预算差异**。交付：config `min_output_tokens`（未配置=缺省 4096 实测够用线、显式 0=回归闸关、≥1 生效）+ 虚拟模型请求 max_tokens 缺失/低于下限 ⇒ 抬到 min(下限, 模型已声明 max_output_tokens)，**只抬不降**；字面模型一个字节不动；抬了就在 /decisions reason 标 `budget_raised <old>→<new>`（不静默，T-020 纪律）。验证：7 条单测（含 0 回归闸 + 模型上限封顶 1024 + 缺省补字段）全绿 + 变异检验（摘除抬预算判断 ⇒ 2 条红）+ 上线实打 `auto:reasoning`+max_tokens=64 ⇒ /decisions 现 `budget_raised 64→4096`。详见 docs/tasks/T-044.md |
 
@@ -66,7 +66,7 @@
 
 | T-046 | 评测器定时管线修复——直连源 + 有效行同步容器 + 外部定时器（评测器不归网关做） | ✅ | **完成并验证（2026-10-08 全链路实跑）**。用户拍板"按推荐方式执行"：外部定时器拥有评测器、网关只做消费者（容器/宿主隔离 + 避免自证循环 + 额度不互污）。现状：旧 watch 任务打 127.0.0.1:3002/8899 旧源空转（admitted:109 假绿）。交付：① sources.direct.json（今日探针同款，实出 10/10）② 主同步器 ops/dev-fleet/sync-admission.ps1（原生 PS，修 5.1 BOM 陷阱用 UTF8Encoding($false)；bash 版留手动工具）③ admission-watch.cmd ④ admission-watch-setup.ps1（每 30min，wscript+hidden-run.vbs 隐藏先例，CIM 注册 + 无限重复去 RepetitionDuration 怪癖）。验收：手动跑通 + 计划任务 12:13 自然轮 LastTaskResult=0 + 容器 /doctor admission.active=true（30s 热加载零重启）+ 旧任务已 Disabled（可逆）。纯宿主侧，不碰网关代码/容器。详见 docs/tasks/T-046.md |
 
-| T-048 | T-043 配套：生产排除名单 + tier 观测回归修复 | 🔵 | **执行中（2026-10-25）**。体检发现运行时 `tier=paid` 但所有池健康（`TickOnce` 无隔离池即返回 ⇒ `ProbeFree` 永不执行 ⇒ 档位无法回归）。同时 `exclude_models` 需写进生产 config（T-043 白名单不含 config.json）。交付：config `exclude_models:["agnes-3.0-flash"]` + `TickOnce` 在 paid 时继续探活 + 回归用例。判据：部署后池内无 3.0-flash；3–5 分钟内 NATS status `tier` 回到 free。详见 docs/tasks/T-048.md |
+| T-048 | T-043 配套：生产排除名单 + tier 观测回归修复 | ✅ | **完成并部署验证（2026-10-25，mt-deploy 15 PASS / 0 FAIL）**。体检发现运行时 `tier=paid` 但所有池健康（`TickOnce` 无隔离池即返回 ⇒ `ProbeFree` 永不执行 ⇒ 档位无法回归）。同时 `exclude_models` 需写进生产 config（T-043 白名单不含 config.json）。交付：config `exclude_models:["agnes-3.0-flash"]` + `TickOnce` 在 paid 时继续探活 + 回归用例。判据：部署后池内无 3.0-flash；3–5 分钟内 NATS status `tier` 回到 free。详见 docs/tasks/T-048.md |
 
 ## 存量登记说明
 
