@@ -52,7 +52,7 @@ ENV HOME=/tmp USER=moretoken
 
 # 预建三个挂载点：read_only rootfs 下不能赌运行时替你创建目录。
 # 属主无所谓（卷/挂载会覆盖），但目录必须在，否则挂载点是文件还是目录由 Docker 猜。
-RUN mkdir -p /run/moretoken /run/mt-tokens /run/secrets/nats
+RUN mkdir -p /run/moretoken /run/mt-tokens /run/secrets/nats /var/lib/moretoken/telemetry
 
 COPY --from=build /out/moretoken /usr/local/bin/moretoken
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh

@@ -55,6 +55,9 @@ services:
       # ⚠️ 热加载已接线（admission.Table.Watch，30s 轮询 mtime）⇒ 日后拷新
       #    admitted.json 到 runtime/ 即可，**不必重启容器**。
       - ./runtime/admitted.json:/run/admission/admitted.json:ro
+      # ── T-050 运行记录：宿主可读的按天 JSONL（不含密钥/正文，30 天保留）──
+      # 容器内只追加写；宿主 `docker/runtime/telemetry/` 直接可读。
+      - ./runtime/telemetry:/var/lib/moretoken/telemetry
     environment:
       # NATS 发布（T-005/T-014）：容器内用 linux nats CLI（镜像已 pin sha256 装入 /usr/local/bin）。
       NATS_SERVERS: "nats://www.aimly.top:14222"
@@ -63,6 +66,9 @@ services:
       NATS_BIN: "/usr/local/bin/nats"                     # 覆盖 Windows 默认路径（publish.go:75）
       # 容器形态禁 last_used 回写：ro 挂载下回写必 EROFS 刷 WARN，且与宿主写者构成吊销复活竞态。
       MORETOKEN_AUTH_TOUCH: "off"
+      # T-050：运行记录（目录为空/不可写时自动禁用，不影响路由）。
+      MORETOKEN_TELEMETRY_DIR: "/var/lib/moretoken/telemetry"
+      MORETOKEN_TELEMETRY_RETENTION_DAYS: "30"
       TZ: "Asia/Shanghai"
     # /health 是 T-024 鉴权豁免端点，healthcheck 无需 token。
     healthcheck:

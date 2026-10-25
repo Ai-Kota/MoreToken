@@ -9,6 +9,7 @@
 package proxy
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +24,7 @@ import (
 	"moretoken/internal/metrics"
 	"moretoken/internal/provider"
 	"moretoken/internal/router"
+	"moretoken/internal/telemetry"
 )
 
 // MaxBodyBytes 请求体上限（默认 32 MiB）。
@@ -56,6 +58,9 @@ type Server struct {
 	// auth 入站 token 校验面（nil = 未配置鉴权，行为与 T-024 之前完全一致）。
 	// 只经 WithAuth 注入；校验逻辑在 auth_middleware.go。
 	auth *auth.Store
+
+	// tel 运行记录（nil = 不记录；T-050）。只写事实，不参与路由。
+	tel *telemetry.Recorder
 }
 
 // SlowRequestThreshold / LargeBodyThreshold 成功路径留痕的两条线。
@@ -101,6 +106,12 @@ func (s *Server) WithMetrics(w *metrics.Window, escalateAfter time.Duration) *Se
 // WithAuth 挂上入站 token 校验面（可链式，T-024）。不挂 = 零鉴权，行为与以前完全一致。
 func (s *Server) WithAuth(store *auth.Store) *Server {
 	s.auth = store
+	return s
+}
+
+// WithTelemetry 挂上运行记录（T-050）。不挂 = 不写记录，行为与接入前一致。
+func (s *Server) WithTelemetry(tel *telemetry.Recorder) *Server {
+	s.tel = tel
 	return s
 }
 
@@ -185,6 +196,27 @@ func (s *Server) chatHandler(format config.Format) http.HandlerFunc {
 			s.mwin.Observe(time.Now(), kindLabel, status >= 200 && status < 300, time.Since(start))
 		}()
 
+		// T-050 运行记录：请求出口写一行（成功/失败/客户端取消都写）。
+		// 只写事实，不参与路由；未配置目录时完全零行为变化。
+		var telRec *telemetry.Request
+		var outcomeHint string
+		if s.tel != nil && s.tel.Enabled() {
+			telRec = &telemetry.Request{
+				RequestID: s.tel.NextRequestID(),
+				Client:    AuthNameFromContext(req.Context()),
+				Protocol:  string(format),
+			}
+			defer func() {
+				telRec.TotalMs = int(time.Since(start).Milliseconds())
+				telRec.Status = status
+				telRec.Outcome = classifyOutcome(req.Context(), status, outcomeHint)
+				if !telRec.Stream && telRec.TTFTMs == 0 {
+					telRec.TTFTMs = telRec.TotalMs
+				}
+				s.tel.WriteRequest(telRec)
+			}()
+		}
+
 		if req.Method != http.MethodPost {
 			status = http.StatusMethodNotAllowed
 			http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
@@ -202,6 +234,9 @@ func (s *Server) chatHandler(format config.Format) http.HandlerFunc {
 			status = http.StatusBadRequest
 			http.Error(w, `{"error":"read body"}`, http.StatusBadRequest)
 			return
+		}
+		if telRec != nil {
+			telRec.ReqBytes = len(body)
 		}
 		if int64(len(body)) > limit {
 			status = http.StatusRequestEntityTooLarge
@@ -237,6 +272,12 @@ func (s *Server) chatHandler(format config.Format) http.HandlerFunc {
 		}
 
 		stream := kind == provider.Streaming
+		if telRec != nil {
+			telRec.Stream = stream
+			telRec.Want = probe.Model
+			telRec.Virtual = virtual
+			telRec.WantKind = wantKind
+		}
 		if stream {
 			// SSE 头可以先设，但**绝不提前 Flush**（T-027）。
 			//
@@ -272,8 +313,32 @@ func (s *Server) chatHandler(format config.Format) http.HandlerFunc {
 			VirtualModel: virtual,
 			WantKind:     wantKind,
 			Model:        litModel,
+			AttemptSink: func(a router.Attempt) {
+				if telRec == nil {
+					return
+				}
+				if len(a.Reason) > 300 {
+					a.Reason = a.Reason[:300] + "…"
+				}
+				telRec.Attempts = append(telRec.Attempts, a)
+			},
 			StreamCB: func(chunk []byte) {
 				if stream {
+					if telRec != nil {
+						if telRec.TTFTMs == 0 {
+							telRec.TTFTMs = int(time.Since(start).Milliseconds())
+						}
+						telRec.RespBytes += len(chunk)
+						if in, out, ok := telemetry.ParseUsage(chunk); ok {
+							if in != 0 {
+								telRec.InputTokens = in
+							}
+							if out != 0 {
+								telRec.OutputTokens = out
+							}
+							telRec.UsageKnown = true
+						}
+					}
 					// 原样透传 SSE 数据块（provider 已剥 data: 前缀；这里补回线格式）。
 					// 首块的 Write+Flush 才真正把 200+SSE 头送上线（T-027：不提前 flush）。
 					wroteChunk = true
@@ -285,6 +350,15 @@ func (s *Server) chatHandler(format config.Format) http.HandlerFunc {
 			},
 		})
 		if ferr != nil {
+			if telRec != nil {
+				telRec.FailReason = truncateTel(ferr.Error())
+				telRec.Provider = res.ProviderID
+				telRec.Model = res.Model
+				telRec.BudgetRaised = res.BudgetRaised
+				if res.Fail.Kind != provider.FailNone {
+					telRec.FailKind = res.Fail.Kind.String()
+				}
+			}
 			// **上下文超限**要单独说：它是**调用方**的问题（送太多），不是服务挂了。
 			// 返回 503 会让智能体以为"服务不可用"从而重试——而这是个确定性失败，
 			// 重试只是白等（实测每个候选 60–80 秒）。413 + 可操作提示才是对的。
@@ -299,6 +373,7 @@ func (s *Server) chatHandler(format config.Format) http.HandlerFunc {
 				// 不能回 503：那是"服务端暂时问题，稍后重试"，会诱导客户端重试一个
 				// 永远不可能成功的请求。2026-09-22 实测：5 个子会话被指定了
 				// `claude-opus-4-8[1m]`（池里没有 opus），就是这么卡死关停的。
+				outcomeHint = "model_not_found"
 				status = http.StatusNotFound
 				msg := fmt.Sprintf(`{"type":"error","error":{"type":"not_found_error","message":%q}}`,
 					"model: "+probe.Model)
@@ -324,6 +399,7 @@ func (s *Server) chatHandler(format config.Format) http.HandlerFunc {
 				// 为什么不能回 503：503 的字面含义是"服务端暂时问题，稍后重试"——
 				// **这个信号本身就在诱导重试**，而超限是个永远不会成功的请求。
 				// 2026-09-22 那个会话就是这么卡住的：13 分钟 8 次，每次 70 秒。
+				outcomeHint = "context_too_long"
 				status = http.StatusBadRequest
 				msg := fmt.Sprintf(`{"type":"error","error":{"type":"invalid_request_error","message":%q}}`,
 					contextMessage(ferr))
@@ -362,9 +438,33 @@ func (s *Server) chatHandler(format config.Format) http.HandlerFunc {
 					Auth:     AuthNameFromContext(req.Context()),
 				})
 			}
+			outcomeHint = "exhausted"
 			status = http.StatusServiceUnavailable
 			http.Error(w, msg, http.StatusServiceUnavailable)
 			return
+		}
+		if telRec != nil {
+			telRec.Provider = res.ProviderID
+			telRec.Model = res.Model
+			telRec.BudgetRaised = res.BudgetRaised
+			if res.Fail.Kind != provider.FailNone {
+				telRec.FailKind = res.Fail.Kind.String()
+			}
+			if res.Fail.Reason != "" {
+				telRec.FailReason = truncateTel(res.Fail.Reason)
+			}
+			if !stream {
+				telRec.RespBytes = len(res.Body)
+				if in, out, ok := telemetry.ParseUsage(res.Body); ok {
+					if in != 0 {
+						telRec.InputTokens = in
+					}
+					if out != 0 {
+						telRec.OutputTokens = out
+					}
+					telRec.UsageKnown = true
+				}
+			}
 		}
 		if s.declog != nil {
 			e := routerEntry(res)
@@ -388,6 +488,51 @@ func (s *Server) chatHandler(format config.Format) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(res.StatusCode)
 		w.Write(res.Body)
+	}
+}
+
+// truncateTel 截断失败原因，避免一行记录被上游大 body 撑爆（与 /decisions 同口径）。
+func truncateTel(s string) string {
+	if len(s) <= 300 {
+		return s
+	}
+	return s[:300] + "…"
+}
+
+// classifyOutcome 把一次请求归到稳定类别，供智能体按类别聚合。
+//
+// 客户端取消必须单独成类——它不是网关失败（2026-10-25 体检发现 13 次
+// context canceled 被记成了 503，污染成功率）。
+func classifyOutcome(ctx context.Context, status int, hint string) string {
+	if ctx != nil && ctx.Err() == context.Canceled {
+		return "client_canceled"
+	}
+	if hint != "" {
+		return hint
+	}
+	switch {
+	case status >= 200 && status < 300:
+		return "ok"
+	case status == 0:
+		return "no_response"
+	case status == 401:
+		return "auth_error"
+	case status == 403:
+		return "forbidden"
+	case status == 404:
+		return "not_found"
+	case status == 413:
+		return "request_too_large"
+	case status == 429:
+		return "rate_limited"
+	case status == 503:
+		return "exhausted"
+	case status >= 500:
+		return "upstream_error"
+	case status >= 400:
+		return "client_error"
+	default:
+		return "unknown"
 	}
 }
 

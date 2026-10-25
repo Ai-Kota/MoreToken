@@ -33,7 +33,7 @@ if [ ! -f "$HERE/.env.keys" ] && grep -q '"env:' "$CONFIG_HOST" 2>/dev/null; the
   say "   ⚠️ config 里有 env: 指针但没有 docker/.env.keys —— 那些 key 会 unresolved（池 503）。"
   say "     cp docker/.env.keys.example docker/.env.keys 填入真实值后重跑本脚本。"
 fi
-mkdir -p "$RUNTIME"
+mkdir -p "$RUNTIME" "$RUNTIME/telemetry"   # telemetry: T-050 运行记录（容器 uid 10001 需可写）
 if [ ! -f "$TOKENS" ]; then
   printf '{"tokens":[]}\n' > "$TOKENS"
   say "   ⚠️ 无 tokens.json → 建空名单：**网关当前不鉴权**（仅 127.0.0.1 可达，勉强可接受）。"

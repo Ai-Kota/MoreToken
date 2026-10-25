@@ -9,10 +9,10 @@
 
 | 字段 | 值 |
 |------|------|
-| **会话日期** | 2026-10-25 12:27:14 |
-| **执行任务** | T-043 排除名单落地并部署（agnes-3.0-flash 已出池）；T-048 修复 tier 观测卡 paid（含变异反证）；mt-deploy 15 PASS；coding 失败根因定位为 admission 表短暂清空 agnes coding 候选 + xkiro 轮换耗尽 |
+| **会话日期** | 2026-10-25 15:59:44 |
+| **执行任务** | T-050 运行记录上线：按天 JSONL（请求+60s快照+逐key attempts+TTFT/token/版本），宿主机 docker/runtime/telemetry 可读；客户端取消单独分类；mt-report.py 可查询；部署 15 PASS，真实文件已生成且无密钥泄漏 |
 | **完成状态** | 🔄 进行中 |
-| **会话摘要** | T-043 排除名单落地并部署（agnes-3.0-flash 已出池）；T-048 修复 tier 观测卡 paid（含变异反证）；mt-deploy 15 PASS；coding 失败根因定位为 admission 表短暂清空 agnes coding 候选 + xkiro 轮换耗尽 |
+| **会话摘要** | T-050 运行记录上线：按天 JSONL（请求+60s快照+逐key attempts+TTFT/token/版本），宿主机 docker/runtime/telemetry 可读；客户端取消单独分类；mt-report.py 可查询；部署 15 PASS，真实文件已生成且无密钥泄漏 |
 
 ---
 
@@ -24,16 +24,23 @@
 
 | 任务ID | 进度 | 停在哪里 | 下一步 |
 |:------:|:----:|---------|--------|
-| T-043 排除名单落地并部署（agnes-3.0-flash 已出池）；T-048 修复 tier 观测卡 paid（含变异反证）；mt-deploy 15 PASS；coding 失败根因定位为 admission 表短暂清空 agnes coding 候选 + xkiro 轮换耗尽 | 🔄 | 上次会话中断 | 观察部署后 /decisions 与 NATS tier；如需进一步降低 coding 503，补 anthropic/coding 供给或调整准入回退策略 |
+| T-050 运行记录上线：按天 JSONL（请求+60s快照+逐key attempts+TTFT/token/版本），宿主机 docker/runtime/telemetry 可读；客户端取消单独分类；mt-report.py 可查询；部署 15 PASS，真实文件已生成且无密钥泄漏 | 🔄 | 上次会话中断 | 观察一天的真实记录；按 models/keys/outcome 出首份优化证据；次日核对轮转与保留 |
 
 ### 未完成的修改
 
 | 文件 | 修改内容 | 是否已提交 |
 |------|---------|:---------:|
-| docs/tasks/SESSION-STATE.md | （待确认） | ⬜ |
-| docs/tasks/T-043.md | （待确认） | ⬜ |
-| docs/tasks/T-048.md | （待确认） | ⬜ |
+| CHANGELOG.md | （待确认） | ⬜ |
+| docker/Dockerfile | （待确认） | ⬜ |
+| docker/docker-compose.vault.yml | （待确认） | ⬜ |
+| docker/docker-compose.yml | （待确认） | ⬜ |
+| docker/mt-deploy.sh | （待确认） | ⬜ |
+| docker/mt-up.sh | （待确认） | ⬜ |
 | docs/tasks/TASKS.md | （待确认） | ⬜ |
+| internal/proxy/proxy.go | （待确认） | ⬜ |
+| internal/router/router.go | （待确认） | ⬜ |
+| internal/router/router_test.go | （待确认） | ⬜ |
+| main.go | （待确认） | ⬜ |
 
 ### 待决策项
 
@@ -57,7 +64,7 @@
 
 ### 项目当前状态
 
-T-043 排除名单落地并部署（agnes-3.0-flash 已出池）；T-048 修复 tier 观测卡 paid（含变异反证）；mt-deploy 15 PASS；coding 失败根因定位为 admission 表短暂清空 agnes coding 候选 + xkiro 轮换耗尽
+T-050 运行记录上线：按天 JSONL（请求+60s快照+逐key attempts+TTFT/token/版本），宿主机 docker/runtime/telemetry 可读；客户端取消单独分类；mt-report.py 可查询；部署 15 PASS，真实文件已生成且无密钥泄漏
 
 ### 关键约定
 
@@ -73,4 +80,4 @@ T-043 排除名单落地并部署（agnes-3.0-flash 已出池）；T-048 修复 
 
 | 日期 | 任务 | 成果 | 问题 |
 |------|------|------|------|
-| 2026-10-25 | T-043 排除名单落地并部署（agnes-3.0-flash 已出池）；T-048 修复 tier 观测卡 paid（含变异反证）；mt-deploy 15 PASS；coding 失败根因定位为 admission 表短暂清空 agnes coding 候选 + xkiro 轮换耗尽 | T-043 排除名单落地并... | |
+| 2026-10-25 | T-050 运行记录上线：按天 JSONL（请求+60s快照+逐key attempts+TTFT/token/版本），宿主机 docker/runtime/telemetry 可读；客户端取消单独分类；mt-report.py 可查询；部署 15 PASS，真实文件已生成且无密钥泄漏 | T-050 运行记录上线：... | |

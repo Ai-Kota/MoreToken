@@ -44,6 +44,37 @@ func newFreePaid(t *testing.T) (*Router, *int32, *int32, func()) {
 	return r, &freeHits, &paidHits, func() {}
 }
 
+// TestRoute_AttemptSink_RecordsKeyAndSuccess —— 成功路径也必须逐 key 留痕（T-050）。
+//
+// 判据：一次成功的字面模型请求，AttemptSink 收到 1 条 kind=ok、key_id 非空、
+// model 为客户端点名模型的记录。旧实现只在失败路径记 attempts，成功路径的
+// "哪把 key 服务的"完全不可见。
+func TestRoute_AttemptSink_RecordsKeyAndSuccess(t *testing.T) {
+	r, _, _, _ := newFreePaid(t)
+	var got []Attempt
+	res, err := r.Route(context.Background(), RouteRequest{
+		Format: config.FormatOpenAI,
+		Body:   []byte(`{"model":"m-flash","messages":[]}`),
+		Kind:   provider.NonStreaming,
+		Model:  "m-flash",
+		AttemptSink: func(a Attempt) {
+			got = append(got, a)
+		},
+	})
+	if err != nil {
+		t.Fatalf("route: %v", err)
+	}
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", res.StatusCode)
+	}
+	if len(got) != 1 {
+		t.Fatalf("attempts = %d, want 1: %+v", len(got), got)
+	}
+	if got[0].Kind != "ok" || got[0].KeyID == "" || got[0].Model != "m-flash" {
+		t.Fatalf("attempt = %+v，want kind=ok / key_id 非空 / model=m-flash", got[0])
+	}
+}
+
 // TestRouter_FreeFirst_PaidZero —— 矩阵 F1 正常（I1+I3）：
 // 免费健康时，openai 请求只走免费池；100 连发付费命中数恒 0。
 // 注：格式隔离下 openai 请求只能选 openai provider（免费），付费是 anthropic 格式，

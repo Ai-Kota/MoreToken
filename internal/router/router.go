@@ -36,6 +36,10 @@ type RouteRequest struct {
 	Kind     provider.Kind
 	StreamCB func([]byte) // Kind=Streaming 时透传给 provider
 
+	// AttemptSink 每次**真实 key 尝试**的回调（成功也回调）。telemetry 用它拿
+	// 逐 key 证据（key_id/耗时/结果）；nil = 不采集，行为与接入前一致。
+	AttemptSink func(Attempt)
+
 	// VirtualModel 为 true 时，Body 里的 "model" 是虚拟声明（auto / auto:<kind>）：
 	// 路由按 WantKind 过滤候选，并在发送前把 model 改写成该候选**真实持有**的模型。
 	// 为 false（客户端给的是字面模型）时 Body 一个字节都不动——既有行为完全不变。
@@ -81,6 +85,9 @@ var ErrModelNotFound = errors.New("model not found")
 type Attempt struct {
 	Provider string `json:"provider"`
 	Model    string `json:"model,omitempty"`
+	// KeyID 池内 key 标识（形如 provider/keyN），**不是 key 明文**。
+	// 只给运行记录做"哪把 key 服务的/哪把在撞墙"的证据；/decisions 不强制携带。
+	KeyID string `json:"key_id,omitempty"`
 	// Kind 失败类别（provider.FailKind 的稳定短名）；"skipped_backoff" = 池级退避中被跳过，
 	// **一次请求都没发**——它和"发了但失败"是两件事，混在一起会把误判洗成事实。
 	Kind   string `json:"kind"`
@@ -540,6 +547,17 @@ func (r *Router) candidates(format config.Format, wantKind string, virtualModel 
 // 第四个返回值是该候选实际使用的模型（虚拟模型解析结果；字面模型时为空）。
 // 第五个返回值是 T-044 的预算说明（抬过 max_tokens 时非空，形如
 // "budget_raised 64→4096"；否则为空）——供 Route 并入 /decisions。
+func emitAttempt(req RouteRequest, a Attempt) {
+	// 字面模型时 tryCandidate 内部用空串占位；记录里补上客户端点名的模型，
+	// 但不改 Route 的返回（既有 /decisions 契约保持"字面模型 Model 为空"）。
+	if a.Model == "" && req.Model != "" {
+		a.Model = req.Model
+	}
+	if req.AttemptSink != nil {
+		req.AttemptSink(a)
+	}
+}
+
 func (r *Router) tryCandidate(ctx context.Context, op *orderedProvider, req RouteRequest) (provider.Result, provider.Fail, bool, string, string) {
 	// 模型候选：字面模型只有一条（body 原样不动）；虚拟模型取该 provider 持有的**全部**
 	// 匹配模型，按偏好顺序。
@@ -559,6 +577,13 @@ func (r *Router) tryCandidate(ctx context.Context, op *orderedProvider, req Rout
 		// 网关不该越权否决（否则一句 `model: <我方未测模型>` 会莫名其妙被拒）。
 		models = r.filterByAdmission(models, req.WantKind)
 		if len(models) == 0 {
+			emitAttempt(req, Attempt{
+				Provider:  op.pv.ID,
+				Kind:      "admission_empty",
+				Reason:    fmt.Sprintf("provider %s has no model of kind %q (after admission)", op.pv.ID, req.WantKind),
+				Stream:    req.Kind == provider.Streaming,
+				BodyBytes: len(req.Body),
+			})
 			return provider.Result{}, provider.Fail{
 				Kind:   provider.FailUpstream,
 				Reason: fmt.Sprintf("provider %s has no model of kind %q", op.pv.ID, req.WantKind),
@@ -583,6 +608,11 @@ func (r *Router) tryCandidate(ctx context.Context, op *orderedProvider, req Rout
 			if err != nil {
 				// body 不是 JSON 对象：绝不能把虚拟名当模型发上游（那会换来一个
 				// 指向错误方向的 "model not found"）。
+				emitAttempt(req, Attempt{
+					Provider: op.pv.ID, Model: m, Kind: "rewrite_error",
+					Reason: err.Error(), Stream: req.Kind == provider.Streaming,
+					BodyBytes: len(req.Body),
+				})
 				return provider.Result{}, provider.Fail{
 					Kind: provider.FailUpstream, Reason: err.Error(),
 				}, false, "", ""
@@ -608,6 +638,7 @@ func (r *Router) tryCandidate(ctx context.Context, op *orderedProvider, req Rout
 		// 会把上界抬到**池子大小**——理由见下面的 FailDenied 分支（403 即时且不改状态）。
 		keyAttempts := 3
 		for attempt := 0; attempt < keyAttempts; attempt++ {
+			attemptStart := time.Now()
 			key, ok := op.pool.Select()
 			if !ok {
 				// 全 key 不可用（60s 短冷却 / 当日摘除）→ 该 provider 不可用，
@@ -621,6 +652,12 @@ func (r *Router) tryCandidate(ctx context.Context, op *orderedProvider, req Rout
 						reason = fmt.Sprintf("all keys cooled (incl %d daily-quota banned)", b)
 					}
 				}
+				emitAttempt(req, Attempt{
+					Provider: op.pv.ID, Model: m, Kind: "all_keys_cooled",
+					Reason: reason, Stream: req.Kind == provider.Streaming,
+					ElapsedMs: int(time.Since(attemptStart).Milliseconds()),
+					BodyBytes: len(body),
+				})
 				r.markBackoff(op)
 				return provider.Result{}, provider.Fail{Kind: provider.FailUpstream, Reason: reason}, false, m, budgetNote
 			}
@@ -637,6 +674,19 @@ func (r *Router) tryCandidate(ctx context.Context, op *orderedProvider, req Rout
 				HeaderBudget: provider.HeaderBudgetFor(len(body)),
 			}
 			res, fail := provider.Invoke(ctx, r.client, pvReq)
+			kindName := "ok"
+			if fail.Kind != provider.FailNone {
+				kindName = fail.Kind.String()
+			} else if res.StatusCode == http.StatusNotFound {
+				kindName = "model_not_found"
+			}
+			emitAttempt(req, Attempt{
+				Provider: op.pv.ID, Model: m, KeyID: key.ID, Kind: kindName,
+				Status: res.StatusCode, Reason: fail.Reason,
+				Stream: req.Kind == provider.Streaming,
+				ElapsedMs: int(time.Since(attemptStart).Milliseconds()),
+				BodyBytes: len(body),
+			})
 			if fail.Kind == provider.FailNone {
 				if res.StatusCode == http.StatusNotFound && mi+1 < len(models) {
 					// 404 = 上游**不认这个模型**。这是"模型维度"的事实，不是 provider 的、

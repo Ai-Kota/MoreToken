@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **T-050 运行记录（给智能体的优化证据）**（2026-10-25）：网关写宿主可读的按天
+  JSONL `docker/runtime/telemetry/telemetry-YYYY-MM-DD.jsonl`。每个聊天请求一行
+  （client/协议/虚拟模型/实际 provider/model/key_id/逐 key attempts/outcome/总耗时/
+  TTFT/token/budget/config_hash/admission 版本），每 60 秒一行状态快照，30 天保留。
+  **不记录** key 明文、prompt、请求/响应正文；key 只记池内 ID。
+  客户端取消单独分类为 `client_canceled`，不再混入 503 失败率。
+  查询：`python scripts/mt-report.py [--days N] [--json]`。详见 `docs/telemetry.md`。
+
 ### Changed（行为变化，升级须知）
 - **T-043：`agnes-3.0-flash` 剔出免费池（排除名单）**（2026-10-25）：config 新增
   `exclude_models`；`MergeAuto`、`ApplyAdmission`、`-harvest`（继承旧清单 + 实测纳新）

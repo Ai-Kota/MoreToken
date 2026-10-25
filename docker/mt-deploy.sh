@@ -55,6 +55,8 @@ say "③ 供给面断言（-check）"
 # ---- ④ 命名卷（幂等）----
 say "④ 确保命名卷 $VOLUME"
 docker volume create "$VOLUME" >/dev/null
+# T-050：运行记录目录（容器 uid 10001 写；Linux 宿主若权限不符需 chown 10001）。
+mkdir -p "$ROOT/docker/runtime/telemetry"
 
 # ---- ⑤ 宿主解析 vault → 管道直投卷（.new + 非空校验 + cmp 变更检测 + 卷内原子 mv）----
 # 明文流向：moretoken.exe 内存 → 管道 → one-shot alpine → 卷。不落 Windows 文件。

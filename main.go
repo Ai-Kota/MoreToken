@@ -32,6 +32,7 @@ import (
 	"moretoken/internal/proxy"
 	"moretoken/internal/router"
 	"moretoken/internal/state"
+	"moretoken/internal/telemetry"
 )
 
 func main() {
@@ -115,6 +116,21 @@ func main() {
 	if listen == "" {
 		listen = cfg.Listen
 	}
+
+	// T-050 运行记录：策略面指纹（不含 key）+ 按天轮转的 JSONL。
+	// 目录未配置 = 禁用；目录不可写 = 告警一次后禁用，绝不拖垮路由。
+	startTime := time.Now()
+	cfgHash := telemetry.ConfigHash(cfg)
+	tel := telemetry.New(telemetry.Options{
+		Dir:           os.Getenv("MORETOKEN_TELEMETRY_DIR"),
+		RetentionDays: envInt("MORETOKEN_TELEMETRY_RETENTION_DAYS", 30),
+		ConfigHash:    cfgHash,
+		AdmissionPath: cfg.AdmissionPath,
+	})
+	defer tel.Close()
+	tel.WriteMap("boot", map[string]any{
+		"listen": listen, "providers": len(cfg.Providers),
+	})
 
 	// 密钥解析：把 keys 里的 env:/vault: 指针换成真值（明文只在内存，不落盘）。
 	// 失败**不 fatal**——保留占位符 → 该池按"无凭据"处理 → 503，而不是把占位符发上游换 401。
@@ -236,7 +252,7 @@ func main() {
 		go adm.Watch(admCtx, 30*time.Second)
 	}
 	rt = router.New(cfg, rtOpts...)
-	srv := proxy.NewServer(rt, cfg, declog).WithMetrics(mwin, escalateAfter)
+	srv := proxy.NewServer(rt, cfg, declog).WithMetrics(mwin, escalateAfter).WithTelemetry(tel)
 
 	// 入站鉴权（T-024）：tokens.json > config.auth_token > 不鉴权（nil = 零行为变化）。
 	// tokensFile != "" 表示**显式指定**——此时文件缺失必须炸（fail-closed，T-026）：
@@ -274,9 +290,12 @@ func main() {
 	if pub.Enabled() {
 		go runStatusPublisher(ctx, pub, rt, st, mwin)
 	}
+	// T-050 快照：每 60s 一行（无流量时也能判断网关处于什么状态）。
+	go runTelemetrySnapshots(ctx, tel, rt, st, mwin, startTime)
 
 	go func() {
 		<-ctx.Done()
+		tel.WriteMap("shutdown", map[string]any{"listen": listen})
 		log.Printf("shutting down (listen %s)", listen)
 		shutdown(httpSrv)
 	}()
@@ -701,6 +720,47 @@ func runCoverageCheck(cfg *config.Config) int {
 	}
 	log.Printf("供给面检查通过：需求面全覆盖（%d 处告警，未阻塞）", len(warn))
 	return 0
+}
+
+// envInt 读正整数环境变量；缺省/非法/<=0 返回 def。
+func envInt(name string, def int) int {
+	v := strings.TrimSpace(os.Getenv(name))
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n <= 0 {
+		return def
+	}
+	return n
+}
+
+// runTelemetrySnapshots 每 60s 写一行状态快照（T-050）。
+// 没有流量时，这行是“网关此刻是什么状态”的唯一证据。
+func runTelemetrySnapshots(ctx context.Context, tel *telemetry.Recorder, rt *router.Router, st *state.State, w *metrics.Window, started time.Time) {
+	if tel == nil || !tel.Enabled() {
+		return
+	}
+	write := func() {
+		tel.WriteMap("snapshot", map[string]any{
+			"uptime_s":  int(time.Since(started).Seconds()),
+			"tier":      tierName(st.Tier()),
+			"pools":     rt.Health(),
+			"metrics":   w.Snapshot(),
+			"admission": rt.AdmissionStats(),
+		})
+	}
+	write()
+	tick := time.NewTicker(60 * time.Second)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			write()
+		}
+	}
 }
 
 // runStatusPublisher 定期把 /health 快照 + 当前层发布到 NATS（T-005）。

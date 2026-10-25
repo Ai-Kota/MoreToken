@@ -38,6 +38,8 @@ services:
       # tokens.json（仅 SHA-256 哈希，无明文）——**目录** ro 挂载（吊销热加载要 rename 可见）。
       # 发放/吊销经 mt-token.sh（one-shot 容器 rw 挂载同目录写入）。
       - ./runtime:/run/mt-tokens:ro
+      # T-050 运行记录：宿主可读的按天 JSONL（不含密钥/正文）。
+      - ./runtime/telemetry:/var/lib/moretoken/telemetry
     env_file:
       # 真实 key 放这里（EXAMPLE: MY_KEY=sk-xxx）。文件缺失不报错——
       # 字面量 key 用户本来就不需要它；env: 用户缺了它启动日志会响亮 WARN unresolved。
@@ -48,6 +50,9 @@ services:
       # 镜像已内置 linux nats CLI（/usr/local/bin/nats，pin sha256）。
       # NATS_SERVERS: "nats://your.server:4222"
       # NATS_CA_FILE: "system"
+      # T-050：运行记录（目录为空/不可写时自动禁用，不影响路由）。
+      MORETOKEN_TELEMETRY_DIR: "/var/lib/moretoken/telemetry"
+      MORETOKEN_TELEMETRY_RETENTION_DAYS: "30"
       TZ: "Asia/Shanghai"
     # /health 是 T-024 鉴权豁免端点，healthcheck 无需 token。
     healthcheck:

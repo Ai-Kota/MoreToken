@@ -70,6 +70,8 @@
 
 | T-049 | anthropic/coding 偶发 503——供给单点 + 准入表清空（待定策） | 🔵 | **已诊断，待定策（2026-10-25）**。`/decisions` 1024 条：`auto:coding` 42 条中 10 条 503（全为 cc-mt，集中在 11:08–11:39）；attempts 显示 agnes-anthropic 被准入表过滤空、xkiro 轮换耗尽、openrouter 无 coding 模型。同窗口另外 32 次 `auto:coding` 成功全落在 `agnes-3.0-flash`（已于 T-043 剔出）。定策选项与未核实项见 docs/tasks/T-049.md。 |
 
+| T-050 | 运行记录：给智能体的 JSONL 遥测（请求 + 快照） | ✅ | **完成并部署验证（2026-10-25 15:57，mt-deploy 15 PASS / 0 FAIL）**。用户定性：要一份完整运行记录供智能体分析优化，不要看板/告警/新栈。交付：`internal/telemetry`（按天轮转、30 天保留）+ 每请求一行（client/协议/虚拟模型/实际 provider-model-key_id/逐 key attempts/TTFT/token/budget/config_hash/admission 版本）+ 60s 快照 + `scripts/mt-report.py`。真实文件已验证：5 请求/3 快照，成功路径带 key_id，无密钥泄漏。详见 docs/tasks/T-050.md、docs/telemetry.md。 |
+
 ## 存量登记说明
 
 - v4.0"会话保持型路由网关"（Phase 1 完成）已归档提交 `15d8f68`，作为设计历史
