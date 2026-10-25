@@ -521,7 +521,11 @@ func runHarvest(cfg *config.Config, configPath string, ttl time.Duration, max in
 	}
 	if prev != nil {
 		for id, ap := range prev.Providers {
-			inv.Providers[id] = ap
+			kept := excludeFromAuto(ap, cfg)
+			if n := len(ap.Verified) - len(kept.Verified); n > 0 {
+				log.Printf("纳新：排除名单剔除了 %s 的 %d 个已验模型（T-043）", id, n)
+			}
+			inv.Providers[id] = kept
 		}
 		log.Printf("纳新：继承旧清单 %d 个 provider 的已验模型", len(prev.Providers))
 	}
@@ -545,10 +549,13 @@ func runHarvest(cfg *config.Config, configPath string, ttl time.Duration, max in
 			fetched++
 			continue
 		}
-		known := make([]string, 0, len(p.Models))
+		// 排除名单也放进 Known：不仅不继承，连**实测都不做**——
+		// 用免费 key 去试一个"永远不用"的模型是纯浪费额度，还可能留下计费痕迹（T-043）。
+		known := make([]string, 0, len(p.Models)+len(cfg.ExcludeModels))
 		for _, m := range p.Models {
 			known = append(known, m.ID)
 		}
+		known = append(known, cfg.ExcludeModels...)
 		h := catalog.Harvester{Client: client, Provider: p, APIKey: key,
 			Known: known, Max: max, Delay: delay}
 		res, err := h.Run(ctx)
@@ -590,7 +597,7 @@ func runHarvest(cfg *config.Config, configPath string, ttl time.Duration, max in
 			log.Printf("纳新：%s 刷新了 %d 条已有模型的窗口信息", p.ID, refreshed)
 		}
 		for _, mi := range res.Verified {
-			if have[mi.ID] {
+			if have[mi.ID] || cfg.IsExcludedModel(mi.ID) {
 				continue
 			}
 			// kinds 只给 general：实测能证明的只有"它活着"，证明不了"它会推理"。
@@ -640,6 +647,25 @@ func runHarvest(cfg *config.Config, configPath string, ttl time.Duration, max in
 	log.Printf("纳新完成：%d 个 provider 成功、%d 个失败，写入 %s（%d 个模型）",
 		fetched, failed, invPath, total)
 	return 0
+}
+
+// excludeFromAuto 从旧清单里剔掉排除名单中的模型（T-043）。
+//
+// 为什么在**继承**这一步就过滤，而不是只依赖写出时：旧清单是下一轮的输入，
+// 若让它带着被排除的模型继续流转，就要在每一处消费点都记得跳过——漏一处
+// 就是一次复发。收口在入口更稳，也让日志能明确报出"剔掉了几个"。
+func excludeFromAuto(ap config.AutoProvider, cfg *config.Config) config.AutoProvider {
+	if len(ap.Verified) == 0 {
+		return ap
+	}
+	kept := make([]config.Model, 0, len(ap.Verified))
+	for _, m := range ap.Verified {
+		if !cfg.IsExcludedModel(m.ID) {
+			kept = append(kept, m)
+		}
+	}
+	ap.Verified = kept
+	return ap
 }
 
 // firstRealKey 取 provider 的第一把**已解析**的凭据（占位符不算）。

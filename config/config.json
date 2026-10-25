@@ -1,8 +1,9 @@
 {
   "listen": ":8462",
+  "exclude_models": ["agnes-3.0-flash"],
   "providers": [
     {
-      "_comment": "免费层·OpenAI 协议·厂商 agnes。agnes 免费档 20 RPM/账号且按账号隔离，故 33 把 key 轮换吸收限流。",
+      "_comment": "免费层·OpenAI 协议·厂商 agnes。agnes 免费档 20 RPM/账号且按账号隔离，故 34 把 key 轮换（含 1 把 Token Plan 付费 key，并入轮换）吸收限流。",
       "id": "agnes",
       "base_url": "https://apihub.agnes-ai.com/v1",
       "format": "openai",
@@ -40,7 +41,8 @@
         "vault:freellm/provider/agnes/agnes2",
         "vault:freellm/provider/agnes/agnes3",
         "vault:freellm/provider/agnes/agnes4",
-        "vault:freellm/provider/agnes/agnes5"
+        "vault:freellm/provider/agnes/agnes5",
+        "vault:freellm/provider/agnes/agnes-paid"
       ],
       "models": [
         {
@@ -158,7 +160,8 @@
         "vault:freellm/provider/agnes/agnes2",
         "vault:freellm/provider/agnes/agnes3",
         "vault:freellm/provider/agnes/agnes4",
-        "vault:freellm/provider/agnes/agnes5"
+        "vault:freellm/provider/agnes/agnes5",
+        "vault:freellm/provider/agnes/agnes-paid"
       ],
       "models": [
         {
@@ -305,50 +308,6 @@
           ],
           "context_length": 256000,
           "max_output_tokens": 64000
-        }
-      ]
-    },
-    {
-      "_comment": "付费兜底·Anthropic。全免费不可用才进入。Token Plan 付费 key（cpk-），实测工具调用与流式均 200。",
-      "id": "agnes-paid-anthropic",
-      "base_url": "https://apihub.agnes-ai.com",
-      "format": "anthropic",
-      "tier": "paid",
-      "keys": [
-        "vault:freellm/provider/agnes/agnes-paid"
-      ],
-      "models": [
-        {
-          "id": "agnes-3.0-flash",
-          "name": "Agnes 3.0 Flash (paid)",
-          "kinds": [
-            "reasoning",
-            "coding",
-            "general"
-          ],
-          "context_length": 524288
-        }
-      ]
-    },
-    {
-      "_comment": "付费兜底·OpenAI。同上，服务 /v1/chat/completions 那条路。",
-      "id": "agnes-paid-openai",
-      "base_url": "https://apihub.agnes-ai.com/v1",
-      "format": "openai",
-      "tier": "paid",
-      "keys": [
-        "vault:freellm/provider/agnes/agnes-paid"
-      ],
-      "models": [
-        {
-          "id": "agnes-3.0-flash",
-          "name": "Agnes 3.0 Flash (paid)",
-          "kinds": [
-            "reasoning",
-            "coding",
-            "general"
-          ],
-          "context_length": 524288
         }
       ]
     }

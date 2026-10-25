@@ -83,7 +83,8 @@ func MergeAuto(cfg *Config, inv *AutoInventory) int {
 			have[m.ID] = true
 		}
 		for _, m := range ap.Verified {
-			if m.ID == "" || have[m.ID] {
+			// 排除名单优先于自动库存（T-043）：生成物里残留的条目也不得入池。
+			if m.ID == "" || have[m.ID] || cfg.IsExcludedModel(m.ID) {
 				continue
 			}
 			p.Models = append(p.Models, Model{

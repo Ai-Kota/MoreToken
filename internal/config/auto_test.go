@@ -138,3 +138,43 @@ func TestLoad_NoAutoFileIsUnchanged(t *testing.T) {
 		t.Errorf("模型数 = %d, want 1（无清单 = 零行为变化）", len(cfg.Providers[0].Models))
 	}
 }
+
+// TestMergeAuto_SkipsExcludedModel —— 排除名单优先于自动库存（T-043）。
+//
+// 这是对"复发路径 ①"的反证：即使生成物里还留着 agnes-3.0-flash，
+// 加载时也必须被挡住。只删清单不做这一步，下一轮 harvest 写回就复发。
+func TestMergeAuto_SkipsExcludedModel(t *testing.T) {
+	cfg := &Config{
+		ExcludeModels: []string{"agnes-3.0-flash"},
+		Providers:     []Provider{{ID: "p", Keys: []string{"k"}}},
+	}
+	inv := &AutoInventory{Providers: map[string]AutoProvider{
+		"p": {Verified: []Model{{ID: "agnes-3.0-flash"}, {ID: "allowed"}}},
+	}}
+
+	added := MergeAuto(cfg, inv)
+
+	if added != 1 {
+		t.Fatalf("added = %d, want 1（排除名单里的模型不得入池）", added)
+	}
+	ms := cfg.Providers[0].Models
+	if len(ms) != 1 || ms[0].ID != "allowed" {
+		t.Fatalf("池内模型 = %v，want [allowed] —— 排除名单未被 MergeAuto 执行", modelIDs(ms))
+	}
+}
+
+// TestIsExcludedModel_NilSafe —— nil 配置不能 panic（调用方不必先判空）。
+func TestIsExcludedModel_NilSafe(t *testing.T) {
+	var cfg *Config
+	if cfg.IsExcludedModel("anything") {
+		t.Fatal("nil 配置不应排除任何模型")
+	}
+}
+
+func modelIDs(ms []Model) []string {
+	out := make([]string, 0, len(ms))
+	for _, m := range ms {
+		out = append(out, m.ID)
+	}
+	return out
+}

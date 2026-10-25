@@ -61,6 +61,11 @@ func ApplyAdmission(cfg *Config, rows []admission.ModelAdmission, minRatio float
 		if strings.TrimSpace(r.Model) == "" {
 			continue
 		}
+		// 排除名单优先于实测证据（T-043）：否则准入表会把已剔除的模型重新加回
+		// 免费池——这正是 3.0-flash 的复发路径 ③。
+		if cfg.IsExcludedModel(r.Model) {
+			continue
+		}
 		kinds := passingKinds(r, minRatio)
 		if len(kinds) == 0 {
 			continue // 无实测证据 ⇒ 不入池（见边界 2）

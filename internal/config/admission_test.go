@@ -194,6 +194,33 @@ func TestApplyAdmission_UnmatchedIsReportedNotSilent(t *testing.T) {
 	}
 }
 
+// TestApplyAdmission_SkipsExcludedModel —— 排除名单优先于实测证据（T-043）。
+//
+// 这是对"复发路径 ③"的反证：准入表里有 agnes-3.0-flash 的及格行时，
+// 既不能把它新增进池，也不能给池内同名模型补 kinds。
+func TestApplyAdmission_SkipsExcludedModel(t *testing.T) {
+	cfg := &Config{
+		ExcludeModels: []string{"agnes-3.0-flash"},
+		Providers: []Provider{{
+			ID: "agnes-anthropic", BaseURL: "https://apihub.agnes-ai.com", Keys: []string{"k"},
+			Models: []Model{{ID: "agnes-3.0-flash", Kinds: []string{"general"}}},
+		}},
+	}
+	rows := []admission.ModelAdmission{
+		row("agnes-3.0-flash", "https://apihub.agnes-ai.com", "UNCERTAIN", [2]int{4, 5}, [2]int{4, 5}),
+	}
+
+	res := ApplyAdmission(cfg, rows, 0.8)
+
+	if res.Added != 0 || res.Upgraded != 0 {
+		t.Fatalf("排除模型不得入池也不得补 kinds，got added=%d upgraded=%d", res.Added, res.Upgraded)
+	}
+	kinds := cfg.Providers[0].Models[0].Kinds
+	if hasKind(kinds, admission.DimReasoning) || hasKind(kinds, admission.DimCoding) {
+		t.Errorf("排除模型被补了 kinds：%v —— ApplyAdmission 没执行排除名单", kinds)
+	}
+}
+
 // TestNormBase：归一化必须吃掉"尾斜杠"与"尾 /v1"的书写差异。
 //
 // ⚠️ 不归一化就**永远匹配不上**，且失败是静默的（模型进不了池、没有任何报错）——

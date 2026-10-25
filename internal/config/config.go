@@ -128,6 +128,19 @@ type Config struct {
 	// 阈值让"多严"成为可调的决定，而不是写死在代码里。
 	AdmissionMinRatio float64 `json:"admission_min_ratio,omitempty"`
 
+	// ExcludeModels 模型级排除名单（T-043）：这些 id 永远不得进入免费池。
+	//
+	// 为什么需要它（2026-10-08 用户拍板）：agnes-3.0-flash 定位"付费维护"，
+	// 用免费 key 调它是否扣付费余额【未核实】；用户决定不冒这个险。但它是
+	// **自动纳新**收进来的——只删一次清单，下一轮 harvest 会从旧清单继承再写回
+	// （T-043 已记录的复发机制）。排除名单是策略，必须写在手写区，由三处执行：
+	//   - config.MergeAuto（加载自动清单时跳过）
+	//   - config.ApplyAdmission（准入表回流时跳过）
+	//   - main.go runHarvest（继承旧清单 + 实测纳新时跳过）
+	//
+	// 为什么不是写在 models.auto.json：那是生成物，每轮会被重写；策略与库存必须分开。
+	ExcludeModels []string `json:"exclude_models,omitempty"`
+
 	// AutoAdded 本次加载从 models.auto.json 追加进来的模型条数（不参与序列化）。
 	// 存在的意义是"纳新到底有没有生效"要能被看见——一个悄悄不生效的机制
 	// 与没有这个机制没有区别（T-014 的教训）。
@@ -221,6 +234,21 @@ func Load(path string) (*Config, error) {
 // sk- / sk-ant- / sk-or- / cpk- / sk-xt-，不会撞上）。
 func IsPlaceholder(k string) bool {
 	return strings.HasPrefix(k, PrefixEnv) || strings.HasPrefix(k, PrefixVault)
+}
+
+// IsExcludedModel 报告 id 是否在排除名单中（T-043）。
+//
+// 名单很小且启动后只读，线性扫描即可；nil 配置返回 false（调用方不必判空）。
+func (c *Config) IsExcludedModel(id string) bool {
+	if c == nil {
+		return false
+	}
+	for _, x := range c.ExcludeModels {
+		if x == id {
+			return true
+		}
+	}
+	return false
 }
 
 // Resolver 把一个 vault path 解析为明文。可注入，便于测试（默认实现会 exec vault.exe）。

@@ -300,6 +300,39 @@ func TestState_TickOnce_NoProbeWhenNothingSidelined(t *testing.T) {
 	}
 }
 
+// TestState_TickOnce_PaidProbesWithoutSidelined —— 档位停在 paid、但所有池都已
+// 自然恢复（无隔离池）时，仍然要探活，否则档位永远回不到 free。
+//
+// 这是 2026-10-25 体检发现的真实状态：NATS status 报 tier=paid，而所有池
+// backed_off=false / cooling=0。根因是 TickOnce 只看隔离池，ProbeFree 永不执行。
+func TestState_TickOnce_PaidProbesWithoutSidelined(t *testing.T) {
+	ck := &fakeClock{now: time.Unix(0, 0)}
+	ps := &probeSim{healthy: true}
+	one := []config.Provider{{ID: "f", BaseURL: "http://x", Format: "openai", Tier: "free", Keys: []string{"k"}}}
+	s := New(Options{
+		HealthyFor:    3 * time.Minute,
+		ProbeInterval: time.Minute,
+		Now:           ck.Now,
+		FreeProviders: one,
+		Probe:         ps.fn,
+		Sidelined:     func() []config.Provider { return nil }, // 没有任何池被隔离
+	})
+	s.AllFreeUnavailable(context.Background())
+	if got := s.Tier(); got != TierPaid {
+		t.Fatalf("precondition: 档位应为 PAID，实际 %v", got)
+	}
+
+	ck.Advance(3 * time.Minute)
+	s.TickOnce(context.Background())
+
+	if ps.hits == 0 {
+		t.Fatal("paid 且无隔离池时应探测，否则档位无法回归 free（本次修复的反证）")
+	}
+	if got := s.Tier(); got != TierFree {
+		t.Fatalf("连续健康满 T 后应回归 FREE，实际 %v", got)
+	}
+}
+
 // TestState_TickOnce_ProbesWhenSidelined —— 有池被隔离就探（给它一条复活通道）。
 //
 // 旧口径是"停在付费档才探全部"，于是**整体还在免费档、只有某个池被隔离**时，
